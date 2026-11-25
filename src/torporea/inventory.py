@@ -11,6 +11,8 @@ import re
 from .detect import _read, _walk
 
 _EXPRESS = re.compile(r"\b(?:app|router)\.(get|post|put|patch|delete)\(\s*['\"`]([^'\"`]+)['\"`]")
+_RR_JSX = re.compile(r"""<Route\b[^>]*?\bpath=["']([^"']+)["'][^<]*?(?:element=\{\s*<(\w+)|Component=\{(\w+)\})""")
+_RR_OBJ = re.compile(r"path:\s*[\"']([^\"']+)[\"']\s*,\s*(?:element:\s*<(\w+)|Component:\s*(\w+))")
 _NEST_CTRL = re.compile(r"@Controller\(\s*['\"`]?([^'\"`)]*)['\"`]?\s*\)")
 _NEST_ROUTE = re.compile(r"@(Get|Post|Put|Patch|Delete)\(\s*['\"`]?([^'\"`)]*)['\"`]?\s*\)")
 
@@ -46,6 +48,11 @@ def inventory(root: str) -> dict:
                 base = "/" + prefix.group(1).strip("/")
                 for m, path in _NEST_ROUTE.findall(t):
                     routes.append(("nest", m.upper(), (base.rstrip("/") + "/" + path.strip("/")).rstrip("/") or "/", rel))
+        if ext in (".jsx", ".tsx", ".js"):
+            t2 = _read(p)
+            for rx in (_RR_JSX, _RR_OBJ):
+                for path, c1, c2 in rx.findall(t2):
+                    pages.append(("/" + path.strip("/") if path != "*" else "/*rest", rel + "#" + (c1 or c2)))
         if ext in (".jsx", ".tsx", ".vue", ".js", ".ts"):
             pr = _page_route(rel)
             if pr is not None:

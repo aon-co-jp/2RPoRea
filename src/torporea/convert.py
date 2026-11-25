@@ -50,7 +50,7 @@ def plan(src: str, out: str, rpoem_path: str = "../RPoem") -> list:
     done = set()
     for f in scan(src):
         if f.kind == "frontend":
-            steps.append(Step(f.framework, "todo", [], "", "frontend (%s) -> Reaxt conversion is not implemented yet" % f.framework))
+            steps.append(Step(f.framework, "todo", [], "", "frontend (%s): only static JSX is ported to Reaxt pages; state, effects and data fetching are not ported" % f.framework))
             continue
         if f.language == "python" and "python" not in done:
             done.add("python")
@@ -109,7 +109,7 @@ def run(src: str, out: str, rpoem_path: str = "../RPoem", dry_run: bool = False,
     inv = results["_inventory"]
     if (inv["routes"] or inv["pages"]) and not dry_run:
         from .reaxt_gen import write as reaxt_write
-        reaxt_write(os.path.join(out, "reaxt-server"), inv["routes"], pages=inv["pages"])
+        reaxt_write(os.path.join(out, "reaxt-server"), inv["routes"], pages=inv["pages"], src_root=src)
     if node and inv["routes"] and not dry_run:
         from .node_opt import write as node_write
         node_write(out, inv["routes"])

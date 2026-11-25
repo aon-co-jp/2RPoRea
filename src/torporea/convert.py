@@ -107,9 +107,9 @@ def run(src: str, out: str, rpoem_path: str = "../RPoem", dry_run: bool = False)
                 continue
             results[s.framework] = subprocess.call(s.argv)
     inv = results["_inventory"]
-    if inv["routes"] and not dry_run:
+    if (inv["routes"] or inv["pages"]) and not dry_run:
         from .reaxt_gen import write as reaxt_write
-        reaxt_write(os.path.join(out, "reaxt-server"), inv["routes"])
+        reaxt_write(os.path.join(out, "reaxt-server"), inv["routes"], pages=inv["pages"])
     write_migration(out, steps, results)
     for s in steps:
         print("%-8s %-9s %s" % (s.framework, s.tool, s.note or s.out))

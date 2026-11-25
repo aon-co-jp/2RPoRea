@@ -153,8 +153,8 @@ def unported(text: str) -> list:
     return notes
 
 
-_FETCH = re.compile(r"fetch\s*\(\s*([\"'`])([^\"'`]+)\s*(?:,\s*\{([^}]*)\})?")
-_AXIOS = re.compile(r"axios\s*\.\s*(get|post|put|patch|delete)\s*\(\s*([\"'`])([^\"'`]+)")
+_FETCH = re.compile(r"\bfetch\s*\(\s*([\"'`])([^\"'`]+)\1\s*(?:,\s*\{([^}]*)\})?")
+_AXIOS = re.compile(r"\baxios\s*\.\s*(get|post|put|patch|delete)\s*\(\s*([\"'`])([^\"'`]+)\2")
 
 
 def fetch_calls(text: str) -> list:

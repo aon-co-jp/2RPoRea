@@ -106,6 +106,10 @@ def run(src: str, out: str, rpoem_path: str = "../RPoem", dry_run: bool = False)
             if s.tool == "todo" or s.note.endswith(")") and "not found" in s.note:
                 continue
             results[s.framework] = subprocess.call(s.argv)
+    inv = results["_inventory"]
+    if inv["routes"] and not dry_run:
+        from .reaxt_gen import write as reaxt_write
+        reaxt_write(os.path.join(out, "reaxt-server"), inv["routes"])
     write_migration(out, steps, results)
     for s in steps:
         print("%-8s %-9s %s" % (s.framework, s.tool, s.note or s.out))

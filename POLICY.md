@@ -18,3 +18,7 @@
 5. No new REST (Connect only). JSON via RS-JSON. Never write secrets.
 6. Develop together with the siblings (pl2pl, RPoem, open-cosmo, RMojo, MFastAPI, 2MFastAPI, Reaxt, RPoRea, COBOL_to, Java_to) and update docs the same day.
 7. Edit docs in Japanese and English every time. Other languages are AI-translated and must say they are not yet native-checked.
+
+## 2026-11-25 追記: convert の方針 / Update: convert policy
+**日本語**: 変換は自前で二重に作らず、2Poem(Python)・Java_to(Java)・COBOL_to(COBOL)へ委譲し、すべて RPoem 向け(`--target rpoem`)にする。変換できないもの(PHP・Node 系サーバー・画面側)は黙って捨てず `MIGRATION.md` に TODO と理由を残す。実行確認は実際に動かした経路だけを「確認済み」と書く(現在は Python のみ)。未了は確認なしで自動で進める。
+**English**: Do not duplicate conversion logic: delegate to 2Poem (Python), Java_to (Java) and COBOL_to (COBOL), always targeting RPoem (`--target rpoem`). Anything that cannot be converted (PHP, Node-style servers, frontends) is never dropped silently; it goes to `MIGRATION.md` as a TODO with the reason. Only paths actually executed are called "verified" (currently Python only). Unfinished work continues automatically without asking.

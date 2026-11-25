@@ -18,3 +18,7 @@
 ## 落とし穴 / Pitfalls
 - **日本語**: シェルの heredoc で正規表現のバックスラッシュが半分になることがある。ファイルの編集は Edit/Write ツールで行う。
 - **English**: A shell heredoc can halve backslashes in regexes; edit files with the Edit/Write tools.
+
+## 2026-11-25 追記: convert / Update: convert
+**日本語**: `src/torporea/convert.py`(plan/run/write_migration)と `tests/test_convert.py`、`tests/conftest.py` を追加。バックエンド変換は兄弟ツールへの委譲。未了(この順): Node系サーバーと画面側の Reaxt 変換、PHP、Node.js/TS の選択式、pl2pl 統合、毎晩の自動追従、紹介ページ。
+**English**: Added `src/torporea/convert.py` (plan/run/write_migration), `tests/test_convert.py` and `tests/conftest.py`. Backend conversion delegates to the sibling tools. Open (in order): Node-style server and frontend conversion to Reaxt, PHP, the optional Node.js/TS choice, pl2pl integration, nightly auto-follow, an intro page.

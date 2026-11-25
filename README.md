@@ -27,3 +27,7 @@ pip install .                      # 開発中 / under development
 **English**: `scan` and 3 unit tests (Python + React/Next, Java + COBOL + PHP + Nest, `node_modules` skipping) work. Conversion is not started. Real Mac/iPhone checks are open.
 
 ライセンス / License: MIT
+
+## 2026-11-25 追記: `convert`(バックエンド) / Update: `convert` (backend)
+**日本語**: `2rporea convert <path> -o <out>` を追加。Python は 2Poem、Java は Java_to、COBOL は COBOL_to を `--target rpoem` で呼び、出力先に `backend-*` を作ります。PHP・Node 系サーバー・画面側(React/Next/Nuxt/Vue)は**まだ変換できず**、黙って捨てずに `MIGRATION.md` へ TODO として残します。Flask の小さな例で実行確認済み、試験5件成功。Java_to / COBOL_to は実行ファイルを PATH、`TORPOREA_JAVA_TO` / `TORPOREA_COBOL_TO`、または隣の `target/release` から探します。
+**English**: Added `2rporea convert <path> -o <out>`. It calls 2Poem (Python), Java_to (Java) and COBOL_to (COBOL) with `--target rpoem`, writing `backend-*` under the output. PHP, Node-style servers and frontends (React/Next/Nuxt/Vue) **cannot be converted yet**; they are never dropped silently but listed as TODO in `MIGRATION.md`. Verified end to end on a small Flask example; 5 tests pass. Java_to / COBOL_to binaries are found on PATH, via `TORPOREA_JAVA_TO` / `TORPOREA_COBOL_TO`, or in a sibling `target/release`.

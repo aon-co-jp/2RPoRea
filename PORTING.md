@@ -12,3 +12,7 @@
 - Done: detection `2rporea scan` (Python, Java, COBOL, PHP, Node.js/Nest, and React, Next, Nuxt, Vue) and 3 passing unit tests.
 - Open (in this order): (1) backend conversion (call 2Poem for Python, Java_to for Java, COBOL_to for COBOL, targeting RPoem); (2) UI and Node-style server conversion (React/Next/Nuxt/Vue/Nest/Express to Reaxt: components, routes, data fetching, SSR); (3) Node.js / TypeScript as an optional exception, including choosing neither; (4) integration with `pl2pl`; (5) nightly auto-follow like 2Poem; (6) an intro page on easy-web.tokyo.
 - To resume: run `python -m pytest -q tests`, confirm 3 pass, then start on (1).
+
+## 2026-11-25 追記: convert / Update: convert
+**日本語**: `src/torporea/convert.py`(plan/run/write_migration)と `tests/test_convert.py`、`tests/conftest.py` を追加。バックエンド変換は兄弟ツールへの委譲。未了(この順): Node系サーバーと画面側の Reaxt 変換、PHP、Node.js/TS の選択式、pl2pl 統合、毎晩の自動追従、紹介ページ。
+**English**: Added `src/torporea/convert.py` (plan/run/write_migration), `tests/test_convert.py` and `tests/conftest.py`. Backend conversion delegates to the sibling tools. Open (in order): Node-style server and frontend conversion to Reaxt, PHP, the optional Node.js/TS choice, pl2pl integration, nightly auto-follow, an intro page.

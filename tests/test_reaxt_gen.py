@@ -28,7 +28,7 @@ def test_component_with_state_and_router(tmp_path):
 
 
 def test_child_component_inlined(tmp_path):
-    (tmp_path / "Nav.jsx").write_text('export function Nav(){ return (<nav><a href="/">Home</a></nav>); }', encoding="utf-8")
+    (tmp_path / "Nav.jsx").write_text('export function Nav(){ return (<nav><a href="/">{title}</a></nav>); }', encoding="utf-8")
     (tmp_path / "Page.jsx").write_text('export function Page(){ return (<main><Nav title="x" /><p>hi</p></main>); }', encoding="utf-8")
     s = render([], pages=[("/p", "Page.jsx")], src_root=str(tmp_path))
-    assert 'element("nav")' in s and 'data-component", "Nav"' in s and "props title not passed" in s
+    assert 'element("nav")' in s and 'data-component", "Nav"' in s and "props title not passed" not in s and 'VNode::text("x")' in s

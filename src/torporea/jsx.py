@@ -109,6 +109,7 @@ class Ctx:
         self.states = states or {}   # name -> (setter, rust type, rust init)
         self.pre = []                # statements emitted before the VNode expression
         self.n = 0
+        self.props = {}              # literal props passed by the parent while inlining a child
         self.resolve = None          # name -> component source text (set by the caller)
         self.depth = 0
 
@@ -171,6 +172,9 @@ def to_rust(n, ctx=None) -> str:
     ctx = ctx or Ctx()
     if isinstance(n, tuple):
         e = n[1]
+        key = e[6:] if e.startswith("props.") else e
+        if key in ctx.props:
+            return f"reaxt::react::VNode::text({_q(ctx.props[key])})"
         if e in ctx.states:
             return f'reaxt::react::VNode::text(format!("{{}}", {e}))'
         return f"reaxt::react::VNode::text({_q('{TODO: ' + e + '}')})"
@@ -191,12 +195,16 @@ def to_rust(n, ctx=None) -> str:
                 except (ValueError, IndexError):
                     child = None
                 if child is not None:
+                    saved = ctx.props
+                    ctx.props = dict(n.attrs)
                     ctx.depth += 1
                     try:
                         inner = to_rust(child, ctx)
                     finally:
                         ctx.depth -= 1
-                    note = ("props " + ", ".join(list(n.attrs) + [x.split("=")[0] for x in n.todo]) + " not passed") if (n.attrs or n.todo) else ""
+                        ctx.props = saved
+                    left = [x.split("=")[0] for x in n.todo]
+                    note = ("props " + ", ".join(left) + " not passed (only string literal props are passed)") if left else ""
                     wrap = f'reaxt::react::VNode::element("div").attr("data-component", {_q(n.tag)})'
                     if note:
                         wrap += f'.attr("data-todo", {_q("TODO " + note)})'

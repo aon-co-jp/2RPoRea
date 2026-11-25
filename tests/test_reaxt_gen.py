@@ -32,3 +32,18 @@ def test_child_component_inlined(tmp_path):
     (tmp_path / "Page.jsx").write_text('export function Page(){ return (<main><Nav title="x" /><p>hi</p></main>); }', encoding="utf-8")
     s = render([], pages=[("/p", "Page.jsx")], src_root=str(tmp_path))
     assert 'element("nav")' in s and 'data-component", "Nav"' in s and "props title not passed" not in s and 'VNode::text("x")' in s
+
+
+def test_fetch_detection_maps_to_action(tmp_path):
+    from torporea.jsx import fetch_calls
+    t = 'useEffect(()=>{ fetch("/api/users/7"); axios.post("/api/cats", d); fetch("/x", {method: "DELETE"}) }, [])'
+    assert fetch_calls(t) == [("GET", "/api/users/7"), ("POST", "/api/cats"), ("DELETE", "/x")]
+    (tmp_path / "P.jsx").write_text(
+        'export function P(){ useEffect(()=>{ fetch("/api/users/7"); axios.post("/api/cats", d); axios.get("/nope") },[]);\n'
+        'return (<div><p>hi</p></div>); }', encoding="utf-8")
+    s = render([("express", "GET", "/users/:id", "s.js"), ("express", "POST", "/cats", "c.js")],
+               pages=[("/p", "P.jsx")], src_root=str(tmp_path))
+    assert "GET /api/users/7 -> Reaxt action app.v1.Routes/GetUsersById" in s
+    assert "// page /p: POST /api/cats maps to action app.v1.Routes/Cats" in s
+    assert "GET /nope: no matching route in inventory" in s
+    assert "data-todo" in s

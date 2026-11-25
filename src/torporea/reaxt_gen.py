@@ -54,8 +54,24 @@ def _component_text(src_root: str, ref: str):
     return None
 
 
+def _route_regex(path: str):
+    parts = [("[^/]+" if re.match(r"[:*]\w*", seg) else re.escape(seg)) for seg in path.strip("/").split("/")]
+    return re.compile("^/" + "/".join(parts) + "$")
+
+
+def match_fetch(meth: str, url: str, action_names: list):
+    """Action name for a fetch URL: exact method+path, else the same path with a leading /api stripped."""
+    path = url.split("?", 1)[0]
+    cands = [path] + ([path[4:] or "/"] if path.startswith("/api") else [])
+    for c in cands:
+        for (m, rpath, name) in action_names:
+            if m == meth and _route_regex(rpath).match(c):
+                return name
+    return None
+
+
 def render(routes: list, name: str = "ported-app", pages: list = (), src_root: str = "") -> str:
-    seen, consts, regs = set(), [], []
+    seen, consts, regs, names = set(), [], [], []
     for fw, m, path, f in routes:
         mn = _method_name(m, path)
         i = 2
@@ -63,12 +79,14 @@ def render(routes: list, name: str = "ported-app", pages: list = (), src_root: s
         while mn in seen:
             mn = f"{base}{i}"; i += 1
         seen.add(mn)
+        names.append((m, path, mn))
         c = re.sub(r"(?<!^)(?=[A-Z])", "_", mn).upper()
         consts.append(f'    const {c}: reaxt_actions::Action<(), String> = reaxt_actions::Action::new("app.v1.Routes", "{mn}");')
         msg = f"TODO: port {m} {path} from {f} ({fw})".replace('"', "'")
         regs.append(f'                .action(&{c}, |_, _: ()| Err(reaxt::backend::Denied::new(501, "{msg}")))')
     pg = []
     for route, f in pages:
+        fetched = []
         msg = f"TODO: port page {route} from {f}".replace('"', "'")
         body = None
         if src_root:
@@ -77,8 +95,19 @@ def render(routes: list, name: str = "ported-app", pages: list = (), src_root: s
             if text is not None:
                 body = convert_file(text, resolve=lambda c: _component_text(src_root, "#" + c))
                 notes = unported(text)
+                from .jsx import fetch_calls
+                for fm, fu in fetch_calls(text):
+                    act = match_fetch(fm, fu, names)
+                    if act:
+                        notes = [n for n in notes if not n.startswith("data fetching")]
+                        notes.append(f"{fm} {fu} -> Reaxt action app.v1.Routes/{act} (call it instead of fetch)")
+                        fetched.append(f"        // page {route}: {fm} {fu} maps to action app.v1.Routes/{act}")
+                    else:
+                        notes.append(f"{fm} {fu}: no matching route in inventory (add an action)")
+                        fetched.append(f"        // page {route}: {fm} {fu} has no matching route in the inventory")
                 if notes:
                     msg += " | not ported: " + "; ".join(notes).replace('"', "'")
+        pg.extend(fetched)
         if body:
             pg.append(f'        .page("{page_file(route)}", reaxt::RenderMode::SsrHydrate, |_| reaxt::react::VNode::element("main").attr("data-todo", "{msg}").child({body}).build())')
             continue

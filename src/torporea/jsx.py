@@ -153,6 +153,25 @@ def unported(text: str) -> list:
     return notes
 
 
+_FETCH = re.compile(r"fetch\s*\(\s*([\"'`])([^\"'`]+)\s*(?:,\s*\{([^}]*)\})?")
+_AXIOS = re.compile(r"axios\s*\.\s*(get|post|put|patch|delete)\s*\(\s*([\"'`])([^\"'`]+)")
+
+
+def fetch_calls(text: str) -> list:
+    """Literal-URL HTTP calls (fetch / axios.<verb>) as [(METHOD, url)], in source order, deduplicated."""
+    found = []
+    for m in _FETCH.finditer(text):
+        mm = re.search(r"method\s*:\s*[\"'`](\w+)", m.group(3) or "")
+        found.append((m.start(), (mm.group(1).upper() if mm else "GET"), m.group(2)))
+    for m in _AXIOS.finditer(text):
+        found.append((m.start(), m.group(1).upper(), m.group(3)))
+    out = []
+    for _, meth, url in sorted(found):
+        if (meth, url) not in out:
+            out.append((meth, url))
+    return out
+
+
 def _handler(expr: str, ctx):
     """Rust closure body for a simple onClick, or None."""
     by_setter = {v[0]: k for k, v in ctx.states.items()}

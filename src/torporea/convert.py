@@ -1,7 +1,7 @@
 """Plan and run backend conversion to RPoem by delegating to the sibling converters.
 
 Python -> 2Poem, Java -> Java_to, COBOL -> COBOL_to (all with target rpoem).
-PHP (Laravel) is converted in-process by php.py (literal returns only, the rest 501).
+PHP (Laravel) and Perl (Mojolicious/Dancer) are converted in-process by php.py / perl.py (literal returns only, the rest 501).
 Everything else (Node.js/Nest/Express, and every frontend) cannot be converted yet:
 it is never dropped silently, it is written to MIGRATION.md as a TODO with the reason.
 """
@@ -73,7 +73,11 @@ def plan(src: str, out: str, rpoem_path: str = "../RPoem") -> list:
             done.add("php")
             o = os.path.join(out, "backend-php")
             steps.append(Step(f.framework, "php", [], o, "Laravel routes; only single literal returns are translated, the rest answer 501"))
-        elif f.language in ("python", "java", "cobol", "php"):
+        elif f.language == "perl" and "perl" not in done:
+            done.add("perl")
+            o = os.path.join(out, "backend-perl")
+            steps.append(Step(f.framework, "perl", [], o, "Mojolicious/Dancer routes; only single literal responses are translated, the rest answer 501"))
+        elif f.language in ("python", "java", "cobol", "php", "perl"):
             continue
         else:
             steps.append(Step(f.framework, "todo", [], "", "backend (%s/%s) -> RPoem conversion is not implemented yet" % (f.framework, f.language)))
@@ -108,9 +112,12 @@ def run(src: str, out: str, rpoem_path: str = "../RPoem", dry_run: bool = False,
     results = {"_inventory": inventory(src)}
     if not dry_run:
         for s in steps:
-            if s.tool == "php":
-                from .php import write as php_write
-                r = php_write(src, s.out, rpoem_path)
+            if s.tool in ("php", "perl"):
+                if s.tool == "php":
+                    from .php import write as lang_write
+                else:
+                    from .perl import write as lang_write
+                r = lang_write(src, s.out, rpoem_path)
                 s.note = "%(routes)d routes, %(translated)d translated, %(todo)d TODO (501), PATCH unsupported: %(patch_unsupported)d" % r
                 results[s.framework] = 0
                 continue

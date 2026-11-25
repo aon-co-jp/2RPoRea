@@ -97,3 +97,7 @@ pip install .                      # 開発中 / under development
 ## PHP(Laravel)→RPoem / PHP (Laravel) to RPoem (2026-11-25)
 **日本語**: `python -m torporea convert <Laravelのフォルダー> -o <出力>` で `backend-php`(RPoem サーバー)を作ります。return 1つだけの単純な本体は中身まで訳し、それ以外は 501(TODO)で返します。
 **English**: `python -m torporea convert <Laravel folder> -o <out>` writes `backend-php` (an RPoem server). Bodies that are a single simple return are translated; everything else answers 501 (TODO).
+
+## Perl→RPoem / Perl to RPoem (2026-11-25)
+**日本語**: Mojolicious::Lite・Dancer2 のアプリも `convert` で `backend-perl`(RPoem サーバー)にします。単純な1つの応答だけ中身まで訳し、それ以外は 501(TODO)です。
+**English**: Mojolicious::Lite and Dancer2 apps are converted by `convert` into `backend-perl` (an RPoem server). Only a single simple response is translated; everything else answers 501 (TODO).

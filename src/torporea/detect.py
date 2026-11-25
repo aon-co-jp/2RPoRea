@@ -86,6 +86,12 @@ def scan(root: str) -> list:
         elif ext == ".php":
             if re.search(r"Illuminate\\|use\s+Laravel", _read(p)):
                 add("backend", "laravel", "php", p)
+        elif ext in (".pl", ".pm", ".psgi"):
+            t = _read(p)
+            if re.search(r"^\s*use\s+Mojolicious::Lite\b", t, re.M):
+                add("backend", "mojolicious", "perl", p)
+            elif re.search(r"^\s*use\s+Dancer2?\b", t, re.M):
+                add("backend", "dancer", "perl", p)
         elif ext in (".jsx", ".tsx"):
             add("frontend", "react", "typescript" if ext == ".tsx" else "javascript", p)
         elif ext == ".vue":

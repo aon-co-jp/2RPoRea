@@ -55,3 +55,8 @@
 **日本語**: 最小の Spring Boot(1経路)と COBOL(DISPLAY のみ)を混ぜたソースで `2rporea convert` を実行し、`java_to` と `cobol_to` が `--target rpoem` で呼ばれ、どちらも終了コード0で `backend-java`・`backend-cobol` を出力、MIGRATION.md に ok と記録されることを確認しました。**未確認**: 出力した RPoem プロジェクトの `cargo build` と起動(今回は生成までを確認)。
 **English**: Running `2rporea convert` on a mixed source (a minimal Spring Boot app with one route plus a DISPLAY-only COBOL program) called `java_to` and `cobol_to` with `--target rpoem`; both exited 0, wrote `backend-java` and `backend-cobol`, and MIGRATION.md recorded ok. **Not verified**: `cargo build` and startup of the generated RPoem projects (only generation was checked).
 
+
+## 2026-11-25 追記: 委譲出力の cargo check / Update: cargo check of delegated output
+**日本語**: 前項の `backend-java`(Spring 1経路)と `backend-cobol`(DISPLAY のみ)を `cargo check`(RPoem へのパス依存)に通し、どちらも成功しました(COBOL 側は非 snake_case 名の警告1件のみ)。**未確認**: 起動して HTTP で応答を見る確認と、業務ロジックの同等性。
+**English**: `cargo check` passes on the previous entry's `backend-java` (one Spring route) and `backend-cobol` (DISPLAY only), both with path dependencies on RPoem (one non-snake-case warning on the COBOL side). **Not verified**: starting them and checking HTTP responses, and business-logic equivalence.
+

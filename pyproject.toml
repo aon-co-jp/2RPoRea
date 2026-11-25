@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torporea"
+version = "0.1.0"
+description = "Detect and convert projects in many languages and frameworks to RPoRea (RPoem backend + Reaxt frontend)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+"2rporea" = "torporea.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

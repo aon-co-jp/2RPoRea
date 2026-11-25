@@ -4,7 +4,7 @@
 **日本語**
 - ユーザー指示により新設(2026-11-25)。目的: 他の言語・フレームワークから **RPoRea**(RPoem と Reaxt を統合したフレームワーク)への変換。Reaxt は React・Next.js・Nuxt.js・Nest.js を統合したフレームワーク。
 - 済み: 検出 `2rporea scan`(Python・Java・COBOL・PHP・Node.js/Nest と、React・Next・Nuxt・Vue)、単体テスト3件成功。
-- 未了(この順): (1)バックエンド変換(Python=2Poem、Java=Java_to、COBOL=COBOL_to を RPoem 向けに呼ぶ)、(2)フロントエンド変換(React/Next/Nuxt/Vue → Reaxt。コンポーネント・ルート・データ取得・SSR)、(3)Node.js・TypeScript を例外的に選べる/選ばない選択、(4)`pl2pl` との統合、(5)毎晩の自動追従(2Poem と同様)、(6)紹介ページ(easy-web.tokyo)。
+- 未了(この順): (1)バックエンド変換(Python=2Poem、Java=Java_to、COBOL=COBOL_to を RPoem 向けに呼ぶ)、(2)画面側・Node 系サーバー側の変換(React/Next/Nuxt/Vue/Nest/Express → Reaxt。コンポーネント・ルート・データ取得・SSR)、(3)Node.js・TypeScript を例外的に選べる/選ばない選択、(4)`pl2pl` との統合、(5)毎晩の自動追従(2Poem と同様)、(6)紹介ページ(easy-web.tokyo)。
 - 再開: `python -m pytest -q tests` で3件成功を確認してから(1)へ。
 
 **English**

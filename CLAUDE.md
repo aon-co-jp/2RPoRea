@@ -62,3 +62,8 @@
 **日本語**: 親が `<Nav title="x" />` のように渡した**文字列リテラルの props**を、子の `{title}` / `{props.title}` に反映します。**実機確認**: 生成サーバーを起動し `<a href="/">x</a>` が SSR で返ることを確認(テスト12件成功)。**未対応**: 式の props(`{x}`)は `data-todo` に出す、fetch/useEffect、WASMハイドレーション、生成 TypeScript の `tsc` 確認(`tsc` 未導入、導入はダウンロード許可待ち)。
 **English**: String-literal props passed by the parent (`<Nav title="x" />`) now fill the child's `{title}` / `{props.title}`. **Verified on a real run**: the generated server returned `<a href="/">x</a>` over SSR (12 tests pass). **Not handled**: expression props (`{x}`) are reported in `data-todo`; fetch/useEffect, WASM hydration, and a `tsc` check of the generated TypeScript (`tsc` is not installed; installing needs download permission).
 
+
+## 2026-11-25 追記: Java_to / COBOL_to 委譲の実行確認 / Update: Java_to and COBOL_to delegation verified
+**日本語**: 最小の Spring Boot(1経路)と COBOL(DISPLAY のみ)を混ぜたソースで `2rporea convert` を実行し、`java_to` と `cobol_to` が `--target rpoem` で呼ばれ、どちらも終了コード0で `backend-java`・`backend-cobol` を出力、MIGRATION.md に ok と記録されることを確認しました。**未確認**: 出力した RPoem プロジェクトの `cargo build` と起動(今回は生成までを確認)。
+**English**: Running `2rporea convert` on a mixed source (a minimal Spring Boot app with one route plus a DISPLAY-only COBOL program) called `java_to` and `cobol_to` with `--target rpoem`; both exited 0, wrote `backend-java` and `backend-cobol`, and MIGRATION.md recorded ok. **Not verified**: `cargo build` and startup of the generated RPoem projects (only generation was checked).
+

@@ -75,7 +75,7 @@ def render(routes: list, name: str = "ported-app", pages: list = (), src_root: s
             from .jsx import convert_file, unported
             text = _component_text(src_root, f)
             if text is not None:
-                body = convert_file(text)
+                body = convert_file(text, resolve=lambda c: _component_text(src_root, "#" + c))
                 notes = unported(text)
                 if notes:
                     msg += " | not ported: " + "; ".join(notes).replace('"', "'")

@@ -109,6 +109,8 @@ class Ctx:
         self.states = states or {}   # name -> (setter, rust type, rust init)
         self.pre = []                # statements emitted before the VNode expression
         self.n = 0
+        self.resolve = None          # name -> component source text (set by the caller)
+        self.depth = 0
 
 
 _STATE = re.compile(r"const\s*\[\s*(\w+)\s*,\s*(set\w+)\s*\]\s*=\s*useState(?:<[^>(]*>)?\(\s*([^)]*?)\s*\)")
@@ -180,6 +182,25 @@ def to_rust(n, ctx=None) -> str:
             return to_rust(kids[0], ctx)
         out = 'reaxt::react::VNode::element("div")'
     else:
+        if n.tag[0].isupper() and ctx.resolve and ctx.depth < 5:
+            src = ctx.resolve(n.tag)
+            sub = find_jsx(src) if src else None
+            if sub is not None and not find_states(src):
+                try:
+                    child, _ = parse(sub)
+                except (ValueError, IndexError):
+                    child = None
+                if child is not None:
+                    ctx.depth += 1
+                    try:
+                        inner = to_rust(child, ctx)
+                    finally:
+                        ctx.depth -= 1
+                    note = ("props " + ", ".join(list(n.attrs) + [x.split("=")[0] for x in n.todo]) + " not passed") if (n.attrs or n.todo) else ""
+                    wrap = f'reaxt::react::VNode::element("div").attr("data-component", {_q(n.tag)})'
+                    if note:
+                        wrap += f'.attr("data-todo", {_q("TODO " + note)})'
+                    return wrap + f".child({inner}).build()"
         tag = n.tag if n.tag[0].islower() else "div"
         out = f'reaxt::react::VNode::element("{tag}")'
         if n.tag[0].isupper():
@@ -200,7 +221,7 @@ def to_rust(n, ctx=None) -> str:
     return out + ".build()" if n.tag or len(n.children) != 1 else out
 
 
-def convert_file(text: str):
+def convert_file(text: str, resolve=None):
     """Rust VNode expression for the component's JSX, or None when no JSX is found."""
     j = find_jsx(text)
     if j is None:
@@ -210,6 +231,7 @@ def convert_file(text: str):
     except (ValueError, IndexError):
         return None
     ctx = Ctx(find_states(text))
+    ctx.resolve = resolve
     body = to_rust(node, ctx)
     lets = "".join(f"let ({n}, set_{n}) = reaxt::react::use_state(|| {v[2]}); " for n, v in ctx.states.items())
     inner = "{ " + lets + " ".join(ctx.pre) + " " + body + " }"

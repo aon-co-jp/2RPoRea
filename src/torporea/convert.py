@@ -97,7 +97,7 @@ def write_migration(out: str, steps: list, results: dict) -> str:
     return p
 
 
-def run(src: str, out: str, rpoem_path: str = "../RPoem", dry_run: bool = False) -> int:
+def run(src: str, out: str, rpoem_path: str = "../RPoem", dry_run: bool = False, node: bool = False) -> int:
     steps = plan(src, out, rpoem_path)
     from .inventory import inventory
     results = {"_inventory": inventory(src)}
@@ -110,6 +110,9 @@ def run(src: str, out: str, rpoem_path: str = "../RPoem", dry_run: bool = False)
     if (inv["routes"] or inv["pages"]) and not dry_run:
         from .reaxt_gen import write as reaxt_write
         reaxt_write(os.path.join(out, "reaxt-server"), inv["routes"], pages=inv["pages"])
+    if node and inv["routes"] and not dry_run:
+        from .node_opt import write as node_write
+        node_write(out, inv["routes"])
     write_migration(out, steps, results)
     for s in steps:
         print("%-8s %-9s %s" % (s.framework, s.tool, s.note or s.out))

@@ -18,11 +18,12 @@ def main(argv=None) -> int:
     c.add_argument("-o", "--output", default=None)
     c.add_argument("--rpoem-path", default="../RPoem")
     c.add_argument("--dry-run", action="store_true")
+    c.add_argument("--node", action="store_true", help="also emit an optional TypeScript client in node-client/ (default: Rust only, no Node.js/TypeScript)")
     a = ap.parse_args(argv)
     if a.cmd == "convert":
         import os
         from .convert import run
-        return run(a.path, a.output or a.path.rstrip("/\\") + "-rporea", a.rpoem_path, a.dry_run)
+        return run(a.path, a.output or a.path.rstrip("/\\") + "-rporea", a.rpoem_path, a.dry_run, a.node)
     if a.cmd == "scan":
         found = scan(a.path)
         if not found:

@@ -19,7 +19,7 @@ pip install .                      # 開発中 / under development
 
 ## これからの予定 / Plan (not done yet)
 1. バックエンドの変換: Python は 2Poem の仕組み、Java は [Java_to](https://github.com/aon-co-jp/Java_to)、COBOL は [COBOL_to](https://github.com/aon-co-jp/COBOL_to) を RPoem 向けに呼ぶ。 / Backend conversion by delegating to 2Poem (Python), Java_to (Java) and COBOL_to (COBOL), targeting RPoem.
-2. 画面側と Node 系サーバー側の変換: React・Next.js・Nuxt.js・Vue のコンポーネント・ルート・データ取得と、Nest.js・Express のサーバー側を **Reaxt**(Rust だけ)へ。1から作る大きな仕事で、近道はしません。 / Frontend conversion of React / Next.js / Nuxt.js / Vue components, routes and data fetching to **Reaxt** (Rust only). This is a large from-scratch job and we take no shortcuts.
+2. 画面側と Node 系サーバー側の変換: React・Next.js・Nuxt.js・Vue のコンポーネント・ルート・データ取得と、Nest.js・Express のサーバー側を **Reaxt**(Rust だけ)へ。1から作る大きな仕事で、近道はしません。 / UI and Node-style server conversion: React / Next.js / Nuxt.js / Vue components, routes and data fetching, plus Nest.js / Express server code, to **Reaxt** (Rust only). This is a large from-scratch job and we take no shortcuts.
 3. Node.js・TypeScript は、2MFastAPI と同様に例外的に選べるようにし、**選ばない**こともできるようにする。 / Node.js and TypeScript are an optional exception (as in 2MFastAPI), and choosing neither must also work.
 
 ## 現況・未了 / Status (2026-11-25)

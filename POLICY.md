@@ -11,7 +11,7 @@
 7. 文書は日本語と英語を基本に毎回編集する。ほかの言語は AI 翻訳で、ネイティブの確認前であることを明記する。
 
 **English**
-1. The target is RPoRea, the framework integrating RPoem and Reaxt. Reaxt integrates React, Next.js, Nuxt.js and Nest.js and is written in Rust only and does not rely on Node.js, TypeScript or hand-written JavaScript.
+1. The target is RPoRea, the framework integrating RPoem and Reaxt. Reaxt integrates React, Next.js, Nuxt.js and Nest.js; it is written in Rust only and does not rely on Node.js, TypeScript or hand-written JavaScript.
 2. Node.js and TypeScript are an **optional exception**. Choosing neither must still produce a conversion that runs end to end.
 3. No shortcuts. Even if demand is low or a large from-scratch effort is needed, build the real thing instead of substituting another approach.
 4. Never silently drop what cannot be converted; leave a `TODO` with the reason and a note in `MIGRATION.md`. **Never claim business logic was ported automatically when it was not.**

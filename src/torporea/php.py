@@ -2,7 +2,8 @@
 
 Reads `routes/web.php` and `routes/api.php` (api routes get the `/api` prefix), resolves each
 handler (closure, `fn() =>`, `[XController::class, 'm']`, `'XController@m'`) and translates the
-handler only when its whole body is a single return of something we can translate exactly:
+handler only when its body is zero or more simple local assignments (`$x = EXPR;`) followed by
+one return of something we can translate exactly:
 
 * a string literal, or a concatenation of string literals and route parameters (`'Hi ' . $name`)
 * a PHP array literal of scalars / nested arrays, returned as is or via `response()->json([...])`
@@ -120,10 +121,11 @@ def _unquote(lit: str) -> str:
 
 
 class _P:
-    def __init__(self, s, params):
+    def __init__(self, s, params, env=None):
         self.t = list(_tokens(s))
         self.i = 0
         self.params = params
+        self.env = env or {}
 
     def peek(self):
         return self.t[self.i] if self.i < len(self.t) else (None, None)
@@ -137,6 +139,9 @@ class _P:
 
     def value(self):
         k, v = self.peek()
+        if k == "var" and self.env.get(v[1:], ("", None))[0] == "json":
+            self.take()
+            return self.env[v[1:]]
         if v == "[":
             return ("json", self.array())
         if k == "word" and v.lower() in ("true", "false", "null"):
@@ -164,6 +169,8 @@ class _P:
             k, v = self.take()
             if k == "str":
                 parts.append(("lit", _unquote(v)))
+            elif k == "var" and v[1:] in self.env and self.env[v[1:]][0] == "text":
+                parts.extend(self.env[v[1:]][1])
             elif k == "var" and v[1:] in self.params:
                 parts.append(("param", v[1:]))
             else:
@@ -202,18 +209,58 @@ class _P:
         return dict(items) if keyed else items
 
 
+def _split_stmts(b: str):
+    """Top-level `;`-separated statements, ignoring `;` inside string literals."""
+    out, cur, q, i = [], [], None, 0
+    while i < len(b):
+        c = b[i]
+        if q:
+            cur.append(c)
+            if c == "\\" and i + 1 < len(b):
+                cur.append(b[i + 1])
+                i += 2
+                continue
+            if c == q:
+                q = None
+        elif c in "'\"":
+            q = c
+            cur.append(c)
+        elif c == ";":
+            out.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(c)
+        i += 1
+    if "".join(cur).strip():
+        out.append("".join(cur).strip())
+    return out
+
+
+def _expr(src: str, params: list, env: dict):
+    p = _P(src, params, env)
+    v = p.value()
+    if p.i != len(p.t):
+        raise _Unsupported("trailing")
+    return v
+
+
 def translate(body: str, params: list):
-    """('json', value) / ('text', parts) for a body that is exactly one return, else None."""
-    b = _strip_comments(body).strip()
-    m = re.fullmatch(r"return\s+(.*?);?\s*", b, re.S)
-    if not m or ";" in m.group(1).rstrip(";").replace("';'", "").replace('";"', ""):
+    """('json', value) / ('text', parts) for a body made only of simple local assignments
+    (`$x = EXPR;`) followed by one `return EXPR;`, else None."""
+    stmts = _split_stmts(_strip_comments(body).strip())
+    if not stmts:
         return None
+    env = {}
     try:
-        p = _P(m.group(1).rstrip(";"), params)
-        v = p.value()
-        if p.i != len(p.t):
+        for st in stmts[:-1]:
+            m = re.fullmatch(r"\$(\w+)\s*=\s*(.+)", st, re.S)
+            if not m or m.group(1) in params or m.group(1) == "this":
+                return None
+            env[m.group(1)] = _expr(m.group(2), params, env)
+        m = re.fullmatch(r"return\s+(.+)", stmts[-1], re.S)
+        if not m:
             return None
-        return v
+        return _expr(m.group(1), params, env)
     except (_Unsupported, StopIteration, ValueError, UnicodeError):
         return None
 
@@ -264,15 +311,15 @@ def render_main(rts: list) -> str:
             pieces = ["s.push_str(%s);" % _rs_str(v) if k == "lit" else "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v) for k, v in tr[1]]
             body = "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
         fns.append("/// %s %s <- %s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(_req: Request, params: Params) -> Response {\n    let _ = &params;\n    %s\n}\n" % (meth, path, src, name, body))
-        helper = {"GET": "get", "POST": "post", "PUT": "put", "DELETE": "delete"}.get(meth)
+        helper = {"GET": "get", "POST": "post", "PUT": "put", "PATCH": "patch", "DELETE": "delete"}.get(meth)
         if helper:
             by_path.setdefault(path, []).append("%s(%s())" % (helper, name))
     for path, hs in by_path.items():
         for h in hs:
             ats.append("        .at(%s, %s)" % (_rs_str(path), h))
     return ("//! 2RPoRea が PHP(Laravel) から生成した RPoem サーバー。訳せた return だけ本体あり、他は 501。\n"
-            "#![allow(unused_variables, dead_code)]\n"
-            "use open_runo_poem_compat::{delete, get, hyper_compat, post, put, Params, Request, Response, Route, Server, StatusCode, TcpListener};\n\n"
+            "#![allow(unused_variables, unused_imports, dead_code)]\n"
+            "use open_runo_poem_compat::{delete, get, hyper_compat, patch, post, put, Params, Request, Response, Route, Server, StatusCode, TcpListener};\n\n"
             + "\n".join(fns) +
             "\n#[tokio::main]\nasync fn main() {\n    let port: u16 = std::env::var(\"PORT\").ok().and_then(|p| p.parse().ok()).unwrap_or(3002);\n"
             "    let app = Route::new()\n" + "\n".join(ats) + ";\n"
@@ -292,5 +339,5 @@ def write(root: str, out: str, rpoem_path: str = "F:/RPoem") -> dict:
     with open(os.path.join(out, "src", "main.rs"), "w", encoding="utf-8", newline="\n") as f:
         f.write(render_main(rts))
     done = sum(1 for r in rts if r[3] is not None)
-    skipped = [r for r in rts if r[0] == "PATCH"]
-    return {"routes": len(rts), "translated": done, "todo": len(rts) - done, "patch_unsupported": len(skipped)}
+    return {"routes": len(rts), "translated": done, "todo": len(rts) - done,
+            "patch": sum(1 for r in rts if r[0] == "PATCH")}

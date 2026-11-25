@@ -13,7 +13,13 @@ Route::get('/', function () {
 Route::get('/hello/{name}', fn($name) => 'Hello, ' . $name . '!');
 Route::get('/users/{id}', [UserController::class, 'show']);
 Route::post('/users', 'UserController@store');
-Route::delete('/x', function () { $a = 1; return 'no'; });
+Route::delete('/x', function () { $a = count([]); return 'no'; });
+Route::patch('/greet/{name}', function ($name) {
+    $greeting = 'Hi ' . $name;
+    $msg = $greeting . '!';
+    return $msg;
+});
+Route::get('/cfg', function () { $data = ['v' => 2]; return response()->json($data); });
 """
 API = """<?php
 use Illuminate\\Support\\Facades\\Route;
@@ -60,3 +66,19 @@ def test_translate_rejects_logic():
 def test_render(tmp_path):
     s = render_main(routes(make(tmp_path)))
     assert '.at("/hello/:name", get(' in s and "NOT_IMPLEMENTED" in s and 'params.get("name")' in s
+
+
+def test_locals_and_patch(tmp_path):
+    rts = routes(make(tmp_path))
+    rs = {(m, p): tr for m, p, _, tr, _ in rts}
+    assert rs[("PATCH", "/greet/:name")] == ("text", [("lit", "Hi "), ("param", "name"), ("lit", "!")])
+    assert rs[("GET", "/cfg")] == ("json", {"v": 2})
+    s = render_main(rts)
+    assert '.at("/greet/:name", patch(' in s
+
+
+def test_locals_rejects():
+    assert translate("$x = foo(); return $x;", []) is None
+    assert translate("$x = 'a'; if ($x) { return 'b'; }", []) is None
+    assert translate("$name = 'z'; return $name;", ["name"]) is None
+    assert translate("$x = 'a;b'; return $x . 'c';", []) == ("text", [("lit", "a;b"), ("lit", "c")])

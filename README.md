@@ -101,3 +101,16 @@ pip install .                      # 開発中 / under development
 ## Perl→RPoem / Perl to RPoem (2026-11-25)
 **日本語**: Mojolicious::Lite・Dancer2 のアプリも `convert` で `backend-perl`(RPoem サーバー)にします。単純な1つの応答だけ中身まで訳し、それ以外は 501(TODO)です。
 **English**: Mojolicious::Lite and Dancer2 apps are converted by `convert` into `backend-perl` (an RPoem server). Only a single simple response is translated; everything else answers 501 (TODO).
+
+## 2026-11-25 追記: PATCH と単純なローカル変数 / PATCH and simple local variables
+**日本語**
+- RPoem の互換層に `patch()` を追加(RPoem `178d6d4`、実 TCP の試験つき)。PHP・Perl 変換は PATCH 経路も出力し、件数は `PATCH routes` として報告する。
+- PHP は `$x = 式;` を並べた後の `return 式;`、Perl は `my $x = 式;` を並べた後の最後の文を訳す(式は文字列・ルート引数の連結、PHP は配列リテラルも可)。関数呼び出しや if などを含む本体は従来どおり 501。
+- **確認済み(実際に起動)**: 例を変換・ビルド・起動し、PHP の `PATCH /greet/Taro` 200「Hi Taro!」、`GET /cfg` 200 `{"v":2}`、`DELETE /x` 501、同じ経路への GET は 405。Perl の `PATCH /greet/Taro` 200「Hi Taro!」、`POST /users` 501。テスト23件成功。
+- **未了**: `$request` の入力・if・関数呼び出しを含む本体、CGI.pm・Catalyst。
+
+**English**
+- Added `patch()` to RPoem's compatibility layer (RPoem `178d6d4`, with a real-TCP test). PHP and Perl conversion now emit PATCH routes; the count is reported as `PATCH routes`.
+- PHP bodies of `$x = EXPR;` statements followed by `return EXPR;`, and Perl bodies of `my $x = EXPR;` statements followed by a translatable final statement, are now translated (EXPR = strings joined with route parameters; PHP also array literals). Bodies with function calls, `if` and so on still answer 501.
+- **Verified (actually started)**: samples converted, built and started. PHP: `PATCH /greet/Taro` 200 "Hi Taro!", `GET /cfg` 200 `{"v":2}`, `DELETE /x` 501, GET on the PATCH-only path 405. Perl: `PATCH /greet/Taro` 200 "Hi Taro!", `POST /users` 501. 23 tests pass.
+- **Open**: bodies using `$request` input, `if` or function calls; CGI.pm and Catalyst.

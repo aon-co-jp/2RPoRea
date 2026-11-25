@@ -125,3 +125,16 @@
 - **Only a single simple response is translated**: Mojolicious `$c->render(text => ...)` and `$c->render(json => {...})`; Dancer `return 'string'`, a final expression, or `to_json(...)`. Strings joined with `.` to route parameters (`$c->param('x')`, `route_parameters->get('x')`, `param('x')`) are supported. Interpolating `"..."`, extra options such as `status =>`, database calls and several statements answer 501 with a TODO. PATCH is not supported yet (the count is reported).
 - **Verified (actually started)**: Mojolicious and Dancer2 samples were converted, built and started. `GET /` 200 "Welcome", `GET /hello/Taro` 200 "Hello, Taro!", `GET /api/status` 200 (JSON), `GET /d/42` 200 "item 42", `PUT /ping` 200 "pong" (any); `POST /users` and `DELETE /d/1` 501; unknown paths 404. 19 tests pass.
 - **Open**: other Perl styles such as CGI.pm and Catalyst; bodies with variables or `if`; PATCH; COBOL to Java; Mojo/RMojo as a target.
+
+## 2026-11-25 追記: PATCH と単純なローカル変数 / PATCH and simple local variables
+**日本語**
+- RPoem の互換層に `patch()` を追加(RPoem `178d6d4`、実 TCP の試験つき)。PHP・Perl 変換は PATCH 経路も出力し、件数は `PATCH routes` として報告する。
+- PHP は `$x = 式;` を並べた後の `return 式;`、Perl は `my $x = 式;` を並べた後の最後の文を訳す(式は文字列・ルート引数の連結、PHP は配列リテラルも可)。関数呼び出しや if などを含む本体は従来どおり 501。
+- **確認済み(実際に起動)**: 例を変換・ビルド・起動し、PHP の `PATCH /greet/Taro` 200「Hi Taro!」、`GET /cfg` 200 `{"v":2}`、`DELETE /x` 501、同じ経路への GET は 405。Perl の `PATCH /greet/Taro` 200「Hi Taro!」、`POST /users` 501。テスト23件成功。
+- **未了**: `$request` の入力・if・関数呼び出しを含む本体、CGI.pm・Catalyst。
+
+**English**
+- Added `patch()` to RPoem's compatibility layer (RPoem `178d6d4`, with a real-TCP test). PHP and Perl conversion now emit PATCH routes; the count is reported as `PATCH routes`.
+- PHP bodies of `$x = EXPR;` statements followed by `return EXPR;`, and Perl bodies of `my $x = EXPR;` statements followed by a translatable final statement, are now translated (EXPR = strings joined with route parameters; PHP also array literals). Bodies with function calls, `if` and so on still answer 501.
+- **Verified (actually started)**: samples converted, built and started. PHP: `PATCH /greet/Taro` 200 "Hi Taro!", `GET /cfg` 200 `{"v":2}`, `DELETE /x` 501, GET on the PATCH-only path 405. Perl: `PATCH /greet/Taro` 200 "Hi Taro!", `POST /users` 501. 23 tests pass.
+- **Open**: bodies using `$request` input, `if` or function calls; CGI.pm and Catalyst.

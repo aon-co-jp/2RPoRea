@@ -118,7 +118,7 @@ def run(src: str, out: str, rpoem_path: str = "../RPoem", dry_run: bool = False,
                 else:
                     from .perl import write as lang_write
                 r = lang_write(src, s.out, rpoem_path)
-                s.note = "%(routes)d routes, %(translated)d translated, %(todo)d TODO (501), PATCH unsupported: %(patch_unsupported)d" % r
+                s.note = "%(routes)d routes, %(translated)d translated, %(todo)d TODO (501), PATCH routes: %(patch)d" % r
                 results[s.framework] = 0
                 continue
             if s.tool == "todo" or s.note.endswith(")") and "not found" in s.note:

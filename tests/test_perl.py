@@ -21,6 +21,12 @@ post '/users' => sub {
   my $u = $c->req->json;
   $c->render(json => $u);
 };
+patch '/greet/:name' => sub {
+  my $c = shift;
+  my $g = 'Hi ' . $c->param('name');
+  my $msg = $g . '!';
+  $c->render(text => $msg);
+};
 app->start;
 """
 DANCER = """package App;
@@ -60,3 +66,14 @@ def test_translate_rejects():
     assert translate('return "hi $name";', []) is None
     assert translate("$c->render(text => 'x', status => 201)", []) is None
     assert translate("return uc('a');", []) is None
+
+
+def test_locals_and_patch(tmp_path):
+    rs = {(m, p): tr for m, p, _, tr, _ in routes(make(tmp_path))}
+    assert rs[("PATCH", "/greet/:name")] == ("text", [("lit", "Hi "), ("param", "name"), ("lit", "!")])
+
+
+def test_locals_rejects():
+    assert translate("my $x = uc('a'); $c->render(text => $x)", []) is None
+    assert translate("my $x = 'a'; $c->render(text => $y)", []) is None
+    assert translate("$x = 'a'; $c->render(text => $x)", []) is None

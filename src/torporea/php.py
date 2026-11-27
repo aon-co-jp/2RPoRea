@@ -337,6 +337,13 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
+        rd = re.fullmatch(r"return\s+redirect\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\)(?:\s*->\s*to\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\))?", stmts[-1], re.S)
+        if rd:
+            target = rd.group(1) if rd.group(1) else rd.group(2)
+            parts = _P(target, params, env).value()
+            if parts[0] != "text" or any(k != "lit" for k, _ in parts[1]):
+                return None
+            return ("redirect", "".join(v for _, v in parts[1]))
         m = re.fullmatch(r"return\s+(.+)", stmts[-1], re.S)
         if not m:
             return None
@@ -354,6 +361,8 @@ def _has_rs(kind: str, key: str) -> str:
 
 
 def _leaf_rs(tr) -> str:
+    if tr[0] == "redirect":
+        return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", %s.parse().unwrap()); r }" % _rs_str(tr[1])
     if tr[0] == "abort":
         return "hyper_compat::html_response(StatusCode::from_u16(%d).unwrap(), %s.to_string())" % (tr[1], _rs_str(tr[2]))
     if tr[0] == "ifcond":

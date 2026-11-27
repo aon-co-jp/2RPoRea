@@ -144,3 +144,10 @@ def test_abort():
     assert translate("abort(403, 'Forbidden');", []) == ("abort", 403, "Forbidden")
     s = render_main([("GET", "/a", [], ("abort", 403, "no"), "routes/web.php")])
     assert "StatusCode::from_u16(403)" in s
+
+
+def test_redirect():
+    assert translate("return redirect('/home');", []) == ("redirect", "/home")
+    assert translate("return redirect($to);", []) is None
+    s = render_main([("GET", "/o", [], ("redirect", "/n"), "routes/web.php")])
+    assert "StatusCode::FOUND" in s and '"/n".parse()' in s

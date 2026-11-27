@@ -186,3 +186,7 @@
 ## 2026-11-27 23:20 `abort(code[, 'message'])`
 **日本語**: Laravel の `abort(404)`・`abort(422, 'msg')`(本体の最後、または if の分岐内)を、その状態コードと本文の応答へ変換。curl実測: `k=1`→`ok [200]`、`x=1`→`need k [422]`。テスト30件。Laravel既定のエラーページ(HTML)は再現せず、本文は渡した文字列のみ。
 **English**: Laravel `abort(404)` and `abort(422, 'msg')` (as the last statement or inside an if branch) now return that status code with the message body. Measured with curl: `k=1` gives `ok [200]`, `x=1` gives `need k [422]`. 30 tests. Laravel's default error page (HTML) is not reproduced; the body is just the given string.
+
+## 2026-11-27 23:30 `return redirect('/path')`
+**日本語**: 固定パスへの `return redirect('/path')` を 302 + `Location` 応答へ変換。curl実測: `/old` → `302`、転送先 `/new`。テスト31件。`redirect()->route(...)`・変数・`back()` は未対応(501)。
+**English**: `return redirect('/path')` to a fixed path now becomes a 302 with a `Location` header. Measured with curl: `/old` gives `302` to `/new`. 31 tests. `redirect()->route(...)`, variables and `back()` are not supported (501).

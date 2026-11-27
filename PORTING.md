@@ -214,3 +214,7 @@
 ## 2026-11-27 22:57 余ったキーをクエリ文字列へ / Extra keys become a query string
 **日本語**: 名前付きルートへの転送で、パスに無いキーを Laravel と同じくクエリ文字列として付ける(値は文字列リテラルのみ、RFC 3986 でエンコード)。curl実測: `/me2/7` → `302` で `/users/7?tab=a%20b`。値がルートパラメーターの余りは501。テスト37件。
 **English**: For named-route redirects, keys not in the path are appended as a query string like Laravel (string-literal values only, RFC 3986 encoded). Measured with curl: `/me2/7` gives `302` to `/users/7?tab=a%20b`. Extra keys whose value is a route parameter stay 501. 37 tests.
+
+## 2026-11-27 23:00 ルートパラメーターをクエリ値に / Route parameters as query values
+**日本語**: 余ったキーの値がルートパラメーターでも、一度URLデコードしてからRFC 3986でエンコードしてクエリ文字列に付ける(二重エンコードを防止)。curl実測: `/me3/a%20b%26c` → `302` で `/users/1?q=a%20b%26c`。テスト37件。注意: 共有の `form_decode` を使うため、パス中の `+` は空白として扱われる。
+**English**: Extra keys whose value is a route parameter are now URL-decoded once and re-encoded (RFC 3986) into the query string, avoiding double encoding. Measured with curl: `/me3/a%20b%26c` gives `302` to `/users/1?q=a%20b%26c`. 37 tests. Note: the shared `form_decode` treats `+` in the path as a space.

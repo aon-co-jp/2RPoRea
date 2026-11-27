@@ -203,4 +203,4 @@ def test_redirect_route_extra_query(tmp_path):
         "Route::get('/a/{id}', function ($id) { return to_route('u', ['id' => $id, 'tab' => 'a b']); });\n"
         "Route::get('/b/{id}', function ($id) { return to_route('u', ['id' => '1', 'x' => $id]); });\n", encoding="utf-8")
     rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
-    assert rs["/a/:id"] == ("redirectp", [("lit", "/u/"), ("param", "id"), ("lit", "?tab=a%20b")]) and rs["/b/:id"] is None
+    assert rs["/a/:id"] == ("redirectp", [("lit", "/u/"), ("param", "id"), ("lit", "?tab="), ("lit", "a%20b")]) and rs["/b/:id"][1][-1] == ("penc", "id")

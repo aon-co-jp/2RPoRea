@@ -419,7 +419,13 @@ def _leaf_rs(tr) -> str:
     if tr[0] == "back":
         return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r }"
     if tr[0] == "redirectp":
-        pieces = " ".join("s.push_str(%s);" % _rs_str(v) if k == "lit" else "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v) for k, v in tr[1])
+        def rp(k, v):
+            if k == "lit":
+                return "s.push_str(%s);" % _rs_str(v)
+            if k == "penc":  # RFC 3986 percent-encoding of a route parameter used as a query value
+                return "for b in form_decode(params.get(%s).unwrap_or(\"\")).bytes() { if b.is_ascii_alphanumeric() || b\"-._~\".contains(&b) { s.push(b as char) } else { s.push_str(&format!(\"%%{:02X}\", b)) } }" % _rs_str(v)
+            return "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v)
+        pieces = " ".join(rp(k, v) for k, v in tr[1])
         return "{ let mut s = String::new(); %s let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", s.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r }" % pieces
     if tr[0] == "redirect":
         return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", %s.parse().unwrap()); r }" % _rs_str(tr[1])
@@ -506,10 +512,10 @@ def _resolve_names(tr, names):
             else:
                 return None
         if args:  # Laravel appends leftover keys as a query string; literal values only
-            if any(k != "lit" for k, _ in args.values()):
-                return None
             from urllib.parse import quote
-            parts.append(("lit", "?" + "&".join("%s=%s" % (quote(k, safe=""), quote(v, safe="")) for k, (_, v) in args.items())))
+            for n, (key, (kind, v)) in enumerate(args.items()):
+                parts.append(("lit", ("?" if n == 0 else "&") + quote(key, safe="") + "="))
+                parts.append(("lit", quote(v, safe="")) if kind == "lit" else ("penc", v))
         return ("redirect", parts[0][1]) if all(k == "lit" for k, _ in parts) and len(parts) == 1 else ("redirectp", parts)
     if tr[0] in ("if", "ifhas"):
         a, b = _resolve_names(tr[4], names), _resolve_names(tr[5], names)

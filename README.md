@@ -138,3 +138,4 @@ pip install .                      # 開発中 / under development
 
 - 08:14 `@for` の減少・刻み(`$i--`・`+= N`・`-= N`、`>`/`>=`/`!=`)に対応、curlで実測。 / `@for` counting down and steps supported, measured with curl.
 - 08:15 `@for` の範囲に `count($xs)`・整数データ `$n` を使えるように、curlで実測。 / `@for` bounds from `count($xs)` and integer `$n`, measured with curl.
+- 08:16 `@while` の条件に `count($xs)`・整数データ `$n` を使えるように、curlで実測。 / `@while` bounds from `count($xs)` and integer `$n`, measured with curl.

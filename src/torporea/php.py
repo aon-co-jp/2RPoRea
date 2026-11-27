@@ -721,6 +721,17 @@ def routes(root: str) -> list:
                             i += d
                         data[v] = str(i)
                         return "".join(out)
+                    # @while bound from view data: count($xs) / integer $n substituted first.
+                    def _wh(q):
+                        t = q.group(3).strip()
+                        c = re.fullmatch(r"count\(\s*\$(\w+)\s*\)", t)
+                        if c and isinstance(data.get(c.group(1)), (list, dict)):
+                            t = str(len(data[c.group(1)]))
+                        c = re.fullmatch(r"\$(\w+)", t)
+                        if c and c.group(1) != q.group(1) and isinstance(data.get(c.group(1)), str) and re.fullmatch(r"-?\d+", data[c.group(1)]):
+                            t = data[c.group(1)]
+                        return "@while($" + q.group(1) + " " + q.group(2) + " " + t + ")"
+                    html = re.sub(r"@while\s*\(\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*(count\(\s*\$\w+\s*\)|\$\w+)\s*\)", _wh, html)
                     html = re.sub(r"@while\s*\(\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*(-?\d+)\s*\)(.*?)@endwhile\b", _while, html, flags=re.S)
                     # @for bounds/starts from view data: count($xs) and integer $n are substituted, then unrolled as literals.
                     def _forh(q):

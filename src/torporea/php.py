@@ -643,6 +643,9 @@ def _leaf_rs(tr) -> str:
         if k == "err_blk":
             inner = " ".join("s.push_str(%s);" % _rs_str(x) if kk == "lit" else "s.push_str(&message%s);" % esc for kk, x in v[1])
             return "if let Some(message) = errs_get(&errs, %s) { %s }" % (_rs_str(v[0]), inner)
+        if k == "sess_if":
+            # PHP truthiness of the flashed value: missing, "", "0" are false.
+            return "if sess.get(%s).is_some_and(|v| match v { serde_json::Value::String(t) => !t.is_empty() && t != \"0\", serde_json::Value::Null => false, serde_json::Value::Bool(b) => *b, _ => true }) { %s } else { %s }" % (_rs_str(v[0]), " ".join(piece_old(a, b) for a, b in v[1]), " ".join(piece_old(a, b) for a, b in v[2]))
         if k == "sess_esc":
             return "s.push_str(&sess.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_default()%s);" % (_rs_str(v), esc)
         if k == "err_all":
@@ -658,13 +661,13 @@ def _leaf_rs(tr) -> str:
     def _kinds(ps):
         for k, v in ps:
             yield k
-            if k == "err_if":
+            if k in ("err_if", "sess_if"):
                 yield from _kinds(v[1])
                 yield from _kinds(v[2])
     kinds = set(_kinds(tr[1]))
     uses_old = "old_esc" in kinds
     uses_err = bool(kinds & {"err_first", "err_blk", "err_all", "err_if"})
-    uses_sess = "sess_esc" in kinds
+    uses_sess = bool(kinds & {"sess_esc", "sess_if"})
     if uses_sess:
         # session('k'): the value flashed by ->with('k', 'v') on the previous request (one request only).
         pieces.insert(0, "let sess = flashed(&req, \"rporea_flash\");")
@@ -1453,6 +1456,29 @@ def routes(root: str) -> list:
                     rq.append(("sess_esc", q.group(2)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*session\(\s*(['\"])([\w.-]+)\1\s*\)\s*\}\}", _sess, html)
+                # @if(session('k')) ... [@else ...] @endif with plain bodies (they may show {{ session('k') }}).
+                def _sessif(q):
+                    tok = re.compile(chr(1) + r"RQ(\d+)" + chr(1))
+                    def _ps(x):
+                        out = []
+                        for i, seg in enumerate(tok.split(x)):
+                            if i % 2:
+                                e = rq[int(seg)]
+                                if e[0] != "sess_esc":
+                                    raise ValueError
+                                out.append(e)
+                            elif seg:
+                                if "{{" in seg or "{!!" in seg or re.search(r"(?<![\w@])@\w", seg) or chr(1) in seg:
+                                    raise ValueError
+                                out.append(("lit", seg))
+                        return out
+                    try:
+                        tp, op = _ps(q.group(3)), _ps(q.group(4) or "")
+                    except ValueError:
+                        return q.group(0)
+                    rq.append(("sess_if", (q.group(2), tp, op)))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"@if\s*\(\s*session\(\s*(['\"])([\w.-]+)\1\s*\)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _sessif, html, flags=re.S)
                 def _errf(q):
                     rq.append(("err_first", q.group(2)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
@@ -1525,7 +1551,7 @@ def routes(root: str) -> list:
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
                         e = rq[int(seg)]
-                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc") else ("query_esc", e))
+                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if") else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])

@@ -125,3 +125,4 @@
 - 2026-11-28: `$request->validate()` の単純な規則に対応 / simple-rule validate() supported (see PORTING.md).
 - 2026-11-28: validate() に email・confirmed / email and confirmed rules (see PORTING.md).
 - 2026-11-28: back()->with() と session() / back()->with() and session() (see PORTING.md).
+- 2026-11-28: @if(session('k')) に対応 / @if(session('k')) supported (see PORTING.md).

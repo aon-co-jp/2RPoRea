@@ -238,3 +238,14 @@ def test_route_view_with_data(tmp_path):
         "<?php\nRoute::view('/hi', 'hi', ['name' => 'T <&>']);\nRoute::view('/hj', 'hi', ['name' => $x]);\n", encoding="utf-8")
     rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert rs["/hi"] == ("text", [("lit", "<h1>Hi T &lt;&amp;&gt;</h1>")]) and rs["/hj"] is None
+
+
+def test_paren_conditions(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::post('/c', function (Request $request) {\n"
+        "    if (($request->has('a') || $request->has('b')) && !$request->filled('c')) { return 'yes'; }\n"
+        "    return 'no';\n});\n", encoding="utf-8")
+    rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    tr = rs["/c"]
+    assert tr[0] == "ifcond" and [k for _, _, k, _ in tr[1]] == ["(", "has", "has", ")", "filled"]

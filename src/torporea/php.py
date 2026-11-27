@@ -327,6 +327,53 @@ _ATOM = re.compile(r"(&&|\|\|)?\s*(!?)\s*\$request->(has|filled)\(\s*'(\w+)'\s*\
 _ELSE = re.compile(r"\s*else\s*\{([^{}]*)\}\s*$", re.S)
 
 
+_TOK = re.compile(r"\s*(&&|\|\||!|\(|\)|\$request->(has|filled)\(\s*'(\w+)'\s*\))")
+
+
+def _cond_tokens(s: str):
+    """Tokenize `$request->has/filled` atoms joined by &&, ||, ! and parentheses into ifcond atoms
+    (join, negate, kind, key); kind '(' / ')' are grouping marks. None when anything else appears."""
+    out, i, j, neg, depth, want_atom = [], 0, "", False, 0, True
+    while i < len(s):
+        if not s[i:].strip():
+            break
+        m = _TOK.match(s, i)
+        if not m:
+            return None
+        t, i = m.group(1), m.end()
+        if want_atom:
+            if t == "!":
+                neg = not neg
+            elif t == "(":
+                out.append((j, neg, "(", "")); j, neg, depth = "", False, depth + 1
+            elif m.group(2):
+                out.append((j, neg, m.group(2), m.group(3))); j, neg, want_atom = "", False, False
+            else:
+                return None
+        else:
+            if t in ("&&", "||"):
+                j, want_atom = t, True
+            elif t == ")" and depth > 0:
+                out.append(("", False, ")", "")); depth -= 1
+            else:
+                return None
+    return out if depth == 0 and not want_atom and out else None
+
+
+def _if_paren(b: str):
+    """Split `if (COND) {THEN} REST` with balanced parentheses in COND; else None."""
+    m = re.match(r"\s*if\s*\(", b)
+    if not m:
+        return None
+    i, depth = m.end(), 1
+    while i < len(b) and depth:
+        depth += {"(": 1, ")": -1}.get(b[i], 0); i += 1
+    if depth:
+        return None
+    m2 = re.match(r"\s*\{([^{}]*)\}\s*", b[i:], re.S)
+    return (b[m.end():i - 1], m2.group(1), b[i + m2.end():]) if m2 else None
+
+
 def translate(body: str, params: list):
     """('json', value) / ('text', parts) for a body made only of simple local assignments
     (`$x = EXPR;`) followed by one `return EXPR;`; or ('if', param, negate, literal, then, else) for
@@ -352,6 +399,15 @@ def translate(body: str, params: list):
             return None
         atoms = [(j or "", n == "!", k, key) for j, n, k, key in _ATOM.findall(m.group(1))]
         return ("ifcond", atoms, then, other)
+    pm = _if_paren(b)
+    toks = _cond_tokens(pm[0]) if pm and "(" in re.sub(r"->(?:has|filled)\(", "", pm[0]) else None
+    if toks:
+        then = translate(pm[1], params)
+        em = _ELSE.fullmatch(pm[2]) if pm[2].strip().startswith("else") else None
+        other = translate(em.group(1), params) if em else translate(pm[2], params)
+        if then is None or other is None:
+            return None
+        return ("ifcond", toks, then, other)
     m = _IFHAS.match(b)
     if m:
         then = translate(m.group(4), params)
@@ -433,7 +489,7 @@ def _leaf_rs(tr) -> str:
         return "hyper_compat::html_response(StatusCode::from_u16(%d).unwrap(), %s.to_string())" % (tr[1], _rs_str(tr[2]))
     if tr[0] == "ifcond":
         # PHP and Rust share && over || precedence, so the chain is emitted as written.
-        cond = " ".join(("%s %s%s" % (j, "!" if n else "", _has_rs(k, key))).strip() for j, n, k, key in tr[1])
+        cond = " ".join(")" if k == ")" else ("%s %s%s" % (j, "!" if n else "", "(" if k == "(" else _has_rs(k, key))).strip() for j, n, k, key in tr[1])
         return "if %s { %s } else { %s }" % (cond, _leaf_rs(tr[2]), _leaf_rs(tr[3]))
     if tr[0] == "ifhas":
         # Laravel: has = key present; filled = present and not an empty string / null.

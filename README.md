@@ -146,3 +146,4 @@ pip install .                      # 開発中 / under development
 - 08:24 配列の関数(`max`・`min`・`end`・`reset`・`array_sum`・`in_array`の三項)に対応、curlで実測。 / Array helpers, measured with curl.
 - 08:25 `str_pad`・`sprintf` に対応、curlで実測。 / `str_pad` and `sprintf`, measured with curl.
 - 08:27 関数の引数に配列の要素(`$xs[0]`・`$u['k']`)を使えるように、curlで実測。 / Array items as function arguments, measured with curl.
+- 08:29 文字列の連結(`.`)と配列の要素を使った計算に対応、curlで実測。 / Concatenation and arithmetic on items, measured with curl.

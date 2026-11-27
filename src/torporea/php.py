@@ -1213,6 +1213,44 @@ def routes(root: str) -> list:
                         return q.group(0)
                     return _h2.escape(out)
                 html = re.sub(r"\{\{\s*(str_pad|sprintf)\s*\(([^(){}]*)\)\s*\}\}", _fmtfn, html)
+                # {{ a . b . c }}: concatenation of literals, known $vars, items and one-arg string functions over them.
+                def _cat(q):
+                    parts = re.split(r"\.(?=(?:[^']*'[^']*')*[^']*$)", q.group(1))
+                    if len(parts) < 2:
+                        return q.group(0)
+                    out = []
+                    for t in parts:
+                        t = t.strip()
+                        fm = re.fullmatch(r"(\w+)\s*\((.*)\)", t)
+                        if fm and fm.group(1) in _fns and fm.group(1) != "nl2br":
+                            v = _arg(fm.group(2))
+                            if not isinstance(v, str) or not (v.isascii() or fm.group(1) in ("strlen", "trim")):
+                                return q.group(0)
+                            try:
+                                v = _fns[fm.group(1)](v)
+                            except ValueError:
+                                return q.group(0)
+                        else:
+                            v = _arg(t)
+                        if not isinstance(v, str):
+                            return q.group(0)
+                        out.append(v)
+                    return _h2.escape("".join(out))
+                html = re.sub(r"\{\{\s*((?:[^{}']|'[^'\\]*')+?\.(?:[^{}']|'[^'\\]*')+?)\s*\}\}", _cat, html)
+                # items inside arithmetic: {{ $u['age'] + 1 }}, {{ $ns[0] * $ns[1] }} (numeric items substituted first).
+                def _itemarith(q):
+                    def _sub(m):
+                        v = _arg(m.group(0))
+                        if not isinstance(v, str) or not re.fullmatch(r"-?\d+(?:\.\d+)?", v):
+                            raise ValueError
+                        return "(" + v + ")"
+                    try:
+                        e = re.sub(r"\$\w+\s*\[[^\]]*\]", _sub, q.group(1))
+                    except ValueError:
+                        return q.group(0)
+                    r = _int_expr(e, data)
+                    return q.group(0) if r is None else _h2.escape(str(r))
+                html = re.sub(r"\{\{\s*((?=[^{}]*\$\w+\s*\[)(?=[^{}]*[-+*/%])[\w$\s+\-*/%().\[\]']+?)\s*\}\}", _itemarith, html)
                 # {{ expr }} with integer/float arithmetic over literals and known $vars (e.g. {{ $n * 3 }}).
                 def _arith(q):
                     if not re.search(r"[-+*/%]", q.group(1)):

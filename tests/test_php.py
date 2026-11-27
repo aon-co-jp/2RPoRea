@@ -104,7 +104,7 @@ def test_request_input():
     assert t == ("text", [("lit", "Hi "), ("query", ("who", "guest")), ("lit", " "), ("query", ("n", ""))])
     assert translate("return $request->input($k);", []) is None
     s = render_main([("GET", "/q", [], t, "routes/web.php")])
-    assert 'input.get("who").map(String::as_str).unwrap_or("guest")' in s and "async fn read_input(" in s
+    assert 'input.get("who")' in s and '"guest".to_string()' in s and "async fn read_input(" in s
 
 
 def test_request_all():

@@ -170,3 +170,7 @@
 ## 2026-11-27 22:45 `$request->only()` / `except()`
 **日本語**: Laravel の `$request->only([...])`・`$request->except([...])`(キーは文字列の配列リテラルのみ、`response()->json(...)` 包みも可)を、`read_input` の結果を絞った JSON 応答へ変換。WSL でビルドしcurl実測: only → `{"a":"1","c":"3"}`、except → `{"b":"2"}`。テスト27件成功。変数のキー配列は未対応(501)。
 **English**: Laravel `$request->only([...])` / `$request->except([...])` (literal string-key arrays only, also inside `response()->json(...)`) now become a filtered JSON response over `read_input`. Built in WSL and measured with curl: only gives `{"a":"1","c":"3"}`, except gives `{"b":"2"}`. 27 tests pass. Key arrays held in variables are not supported (501).
+
+## 2026-11-27 22:50 JSON の型を保持 / JSON types kept
+**日本語**: `read_input` を `HashMap<String, serde_json::Value>` に変更し、JSON本文の数値・真偽値・入れ子をそのまま返す(前回の既知の差=数値が文字列になる、を解消)。curl実測: `{"x":"y","n":2,"ok":true,"o":{"k":[1]}}` → `{"n":2,"ok":true,"o":{"k":[1]},"x":"y"}`。form・query は従来どおり文字列。テスト27件成功。
+**English**: `read_input` now returns `HashMap<String, serde_json::Value>`, so JSON bodies keep numbers, booleans and nesting (fixes the earlier known difference where numbers became strings). Measured with curl: `{"x":"y","n":2,"ok":true,"o":{"k":[1]}}` comes back as `{"n":2,"ok":true,"o":{"k":[1]},"x":"y"}`. Form and query values stay strings. 27 tests pass.

@@ -329,14 +329,14 @@ def _leaf_rs(tr) -> str:
             return "hyper_compat::json_response(StatusCode::OK, &input)"
         keys = ", ".join(_rs_str(k) for k in tr[2])
         keep = "" if tr[1] == "only" else "!"
-        return "{ let keys: &[&str] = &[%s]; let picked: std::collections::HashMap<&String, &String> = input.iter().filter(|(k, _)| %skeys.contains(&k.as_str())).collect(); hyper_compat::json_response(StatusCode::OK, &picked) }" % (keys, keep)
+        return "{ let keys: &[&str] = &[%s]; let picked: std::collections::HashMap<&String, &serde_json::Value> = input.iter().filter(|(k, _)| %skeys.contains(&k.as_str())).collect(); hyper_compat::json_response(StatusCode::OK, &picked) }" % (keys, keep)
     if tr[0] == "json":
         return "hyper_compat::json_response(StatusCode::OK, &serde_json::from_str::<serde_json::Value>(%s).unwrap())" % _rs_str(json.dumps(tr[1], ensure_ascii=False))
     def piece(k, v):
         if k == "lit":
             return "s.push_str(%s);" % _rs_str(v)
         if k == "query":
-            return "s.push_str(input.get(%s).map(String::as_str).unwrap_or(%s));" % (_rs_str(v[0]), _rs_str(v[1]))
+            return "s.push_str(&input.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string()));" % (_rs_str(v[0]), _rs_str(v[1]))
         return "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v)
     pieces = [piece(k, v) for k, v in tr[1]]
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
@@ -374,23 +374,24 @@ def _rs_str(s: str) -> str:
 
 
 _QUERY_HELPER = r"""/// Laravel `$request->input()`: query string merged with the body (form-urlencoded or a JSON object; body wins),
-/// body capped at 1 MiB. Only built for handlers that read input.
-async fn read_input(req: Request) -> std::collections::HashMap<String, String> {
+/// body capped at 1 MiB. JSON values keep their types (numbers, booleans, nested objects). Only built for handlers that read input.
+async fn read_input(req: Request) -> std::collections::HashMap<String, serde_json::Value> {
     use http_body_util::BodyExt;
-    let mut input = hyper_compat::query_params(&req);
+    let mut input: std::collections::HashMap<String, serde_json::Value> =
+        hyper_compat::query_params(&req).into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect();
     let ctype = req.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_ascii_lowercase();
     let limited = http_body_util::Limited::new(req.into_body(), 1 << 20);
     let Ok(body) = limited.collect().await.map(|c| c.to_bytes()) else { return input };
     if ctype.starts_with("application/json") {
         if let Ok(serde_json::Value::Object(m)) = serde_json::from_slice::<serde_json::Value>(&body) {
             for (k, v) in m {
-                input.insert(k, match v { serde_json::Value::String(s) => s, other => other.to_string() });
+                input.insert(k, v);
             }
         }
     } else if ctype.starts_with("application/x-www-form-urlencoded") {
         for kv in String::from_utf8_lossy(&body).split('&').filter(|kv| !kv.is_empty()) {
             let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
-            input.insert(form_decode(k), form_decode(v));
+            input.insert(form_decode(k), serde_json::Value::String(form_decode(v)));
         }
     }
     input

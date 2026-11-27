@@ -231,6 +231,6 @@
 **日本語**: `Route::view('/hi', 'hi', ['name' => '値'])`(値は文字列リテラル)で、ビューの `{{ $name }}` をBladeと同じくHTMLエスケープして埋め込む。curl実測: `Taro <&>` → `Hi Taro &lt;&amp;&gt;`。値が変数のもの・他のBlade構文は501。テスト40件。
 **English**: `Route::view('/hi', 'hi', ['name' => 'value'])` (string-literal values) fills `{{ $name }}` in the view, HTML-escaped as Blade does. Measured with curl: `Taro <&>` gives `Hi Taro &lt;&amp;&gt;`. Variable values and other Blade syntax stay 501. 40 tests.
 
-## 2026-11-27 23:16 条件のかっこ / Parenthesized conditions
+## 2026-11-27 23:11 条件のかっこ / Parenthesized conditions
 **日本語**: `if (($request->has('a') || $request->has('b')) && !$request->filled('c'))` のように、`has`/`filled` を `&&`・`||`・`!`・かっこで組んだ条件を変換(かっこの対応を数えて切り出し、1語ずつ読む)。curl実測: `a=1`→yes、`b=1&c=`→yes、`b=1&c=x`→no、`c=1`→no。`!(...)` も可。テスト41件。`withInput` はセッションの仕組みが無いため未対応(501のまま)。
 **English**: Conditions built from `has`/`filled` with `&&`, `||`, `!` and parentheses now translate (balanced-paren split plus a small tokenizer). Measured with curl: `a=1` yes, `b=1&c=` yes, `b=1&c=x` no, `c=1` no. `!(...)` works too. 41 tests. `withInput` stays unsupported (501) because there is no session layer.

@@ -257,3 +257,11 @@ def test_missing(tmp_path):
         "<?php\nRoute::post('/m', function (Request $request) {\n    if ($request->missing('a')) { return 'none'; }\n    return 'got';\n});\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/m"]
     assert tr[0] == "ifhas" and tr[1] == "missing"
+
+
+def test_boolean(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::post('/b', function (Request $request) {\n    if ($request->boolean('on')) { return 'T'; }\n    return 'F';\n});\n", encoding="utf-8")
+    tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/b"]
+    assert tr[0] == "ifhas" and tr[1] == "boolean"

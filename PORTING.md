@@ -238,3 +238,7 @@
 ## 2026-11-27 23:13 `$request->missing()` / missing()
 **日本語**: `$request->missing('k')`(=has の否定)を、単独・`&&`/`||`/かっこの条件の中で変換。curl実測: `a=1`→a-only、`x=1`→none、`a=1&b=2`→other。テスト42件。
 **English**: `$request->missing('k')` (the negation of has) translates alone and inside `&&`/`||`/parenthesized conditions. Measured with curl: `a=1` a-only, `x=1` none, `a=1&b=2` other. 42 tests.
+
+## 2026-11-27 23:15 `$request->boolean()` / boolean()
+**日本語**: 条件の中の `$request->boolean('k')` を変換(Laravelと同じく 1・"1"・true・"true"・"on"・"yes" が真)。curl実測: `on=yes`/`on=1`/JSON `true`→T、`on=0`/無し→F。テスト43件。
+**English**: `$request->boolean('k')` inside conditions translates (true for 1, "1", true, "true", "on", "yes", as Laravel). Measured: `on=yes`, `on=1`, JSON `true` give T; `on=0` and absent give F. 43 tests.

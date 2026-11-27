@@ -112,3 +112,4 @@
 - 08:25 `str_pad`・`sprintf` に対応、curlで実測。 / `str_pad` and `sprintf`, measured with curl.
 - 08:27 関数の引数に配列の要素(`$xs[0]`・`$u['k']`)を使えるように、curlで実測。 / Array items as function arguments, measured with curl.
 - 08:29 文字列の連結(`.`)と配列の要素を使った計算に対応、curlで実測。 / Concatenation and arithmetic on items, measured with curl.
+- 2026-11-28 比較の三項演算子 `{{ L op R ? 'a' : 'b' }}` に対応 / comparison ternary in views (96 tests, /tz measured).

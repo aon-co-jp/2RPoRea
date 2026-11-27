@@ -743,3 +743,12 @@ def test_view_concat_and_item_arith(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("{{ ucfirst($xs[1]) . '!' }}|{{ $xs[0] . '-' . $xs[1] }}|{{ $u['age'] + 1 }}|{{ $ns[0] * $ns[1] }}|{{ 'a.b' . 'c' }}|{{ 1.5 + 1 }}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "B!|a-b|10|21|a.bc|2.5")])
+
+
+def test_view_comparison_ternary(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['xs' => ['a', 'b'], 'ns' => ['3', '7'], 'u' => ['age' => '9']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("{{ count($xs) > 1 ? 'many' : 'one' }}|{{ $u['age'] >= 10 ? 'adult' : 'kid' }}|{{ $ns[0] + $ns[1] == 10 ? 'ten' : 'no' }}|{{ count($xs) === 2 ? 'y' : 'n' }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "many|kid|ten|y")])

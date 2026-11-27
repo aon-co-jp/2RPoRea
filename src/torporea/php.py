@@ -1251,6 +1251,37 @@ def routes(root: str) -> list:
                     r = _int_expr(e, data)
                     return q.group(0) if r is None else _h2.escape(str(r))
                 html = re.sub(r"\{\{\s*((?=[^{}]*\$\w+\s*\[)(?=[^{}]*[-+*/%])[\w$\s+\-*/%().\[\]']+?)\s*\}\}", _itemarith, html)
+                # {{ L op R ? 'a' : 'b' }} where L/R are numbers from count(), items or arithmetic (PHP 8 numeric comparison).
+                def _val(t):
+                    t = t.strip()
+                    c = re.fullmatch(r"count\(\s*\$(\w+)\s*\)", t)
+                    if c:
+                        v = data.get(c.group(1))
+                        return str(len(v)) if isinstance(v, (list, dict)) else None
+                    v = _arg(t)
+                    if isinstance(v, str):
+                        return v
+                    try:
+                        e = re.sub(r"\$\w+\s*\[[^\]]*\]", lambda m: "(" + _arg(m.group(0)) + ")", t)
+                    except TypeError:
+                        return None
+                    r = _int_expr(e, data)
+                    return None if r is None else str(r)
+                def _ctern(q):
+                    l, op, r = _val(q.group(1)), q.group(2), _val(q.group(3))
+                    num = re.compile(r"-?\d+(?:\.\d+)?")
+                    if l is None or r is None:
+                        return q.group(0)
+                    if num.fullmatch(l) and num.fullmatch(r):
+                        a, b = float(l), float(r)
+                        c = (a > b) - (a < b)
+                    elif op in ("===", "!==", "==", "!="):
+                        c = 0 if l == r else 1
+                    else:
+                        return q.group(0)
+                    ok = {"==": c == 0, "===": c == 0 and (num.fullmatch(l) is None) == (num.fullmatch(r) is None), "!=": c != 0, "!==": c != 0, "<": c < 0, ">": c > 0, "<=": c <= 0, ">=": c >= 0}[op]
+                    return _h2.escape(q.group(4) if ok else q.group(5))
+                html = re.sub(r"\{\{\s*((?:[^{}?']|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^{}?']|\[\s*'\w+'\s*\])+?)\s*\?\s*'([^'\\]*)'\s*:\s*'([^'\\]*)'\s*\}\}", _ctern, html)
                 # {{ expr }} with integer/float arithmetic over literals and known $vars (e.g. {{ $n * 3 }}).
                 def _arith(q):
                     if not re.search(r"[-+*/%]", q.group(1)):

@@ -824,6 +824,10 @@ def routes(root: str) -> list:
                             r = args[2].replace(args[0], args[1])
                         elif f == "implode" and len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], list):
                             r = args[0].join(args[1])
+                        elif f == "round" and len(args) == 2 and isinstance(args[0], str) and re.fullmatch(r"-?\d+(?:\.\d+)?", args[0]) and isinstance(args[1], int) and 0 <= args[1] <= 10:
+                            import decimal
+                            d = decimal.Decimal(args[0]).quantize(decimal.Decimal(1).scaleb(-args[1]), rounding=decimal.ROUND_HALF_UP)
+                            r = format(float(d), ".14g")
                         elif f == "number_format" and len(args) == 1 and isinstance(args[0], str) and re.fullmatch(r"-?\d+", args[0]):
                             r = f"{int(args[0]):,}"
                         else:

@@ -489,3 +489,12 @@ def test_view_numeric_functions(tmp_path):
     (tmp_path / "resources/views/n.blade.php").write_text("@php($x = '-3.7')@php($y = '2.5'){{ abs($x) }} {{ floor($x) }} {{ ceil($x) }} {{ round($x) }} {{ intval($x) }} {{ round($y) }}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/n"] == ("text", [("lit", "3.7 -4 -3 -4 -3 3")])
+
+
+def test_view_round_precision(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/r', 'r');\n", encoding="utf-8")
+    (tmp_path / "resources/views/r.blade.php").write_text("@php($x = '1.955'){{ round($x, 2) }} {{ round('-2.345', 2) }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/r"] == ("text", [("lit", "1.96 -2.35")])

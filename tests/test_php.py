@@ -687,3 +687,12 @@ def test_view_foreach_range(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("@foreach(range(1, 3) as $i){{ $i }}@endforeach|@foreach(range(10, 0, 5) as $i){{ $i }},@endforeach|@foreach(range(0,4,2) as $k => $i){{ $k }}={{ $i }} @endforeach", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "123|10,5,0,|0=0 1=2 2=4 ")])
+
+
+def test_view_arith_and_item_functions(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['xs' => ['a', 'b', 'c'], 'n' => '2']);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("{{ strtoupper($xs[0]) }}|{{ $n * 3 }}|{{ strlen('abc') }}|{{ ($n + 1) * 2 - 1 }}|{{ $n / 4 }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "A|6|3|5|0.5")])

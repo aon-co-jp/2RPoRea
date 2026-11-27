@@ -1080,6 +1080,35 @@ def routes(root: str) -> list:
                             return q.group(0)
                     return _h2.escape(val)
                 html = re.sub(r"\{\{\s*((?:\w+\s*\(\s*)+)\$(\w+)\s*((?:\)\s*)+)\}\}", _fn, html)
+                # one-argument string functions over a literal or an item ($xs[0] / $u['k']): {{ strlen('abc') }}, {{ strtoupper($xs[0]) }}
+                def _fn1(q):
+                    f, arg = q.group(1), q.group(2).strip()
+                    lq = re.fullmatch(r"'([^'\\]*)'", arg)
+                    if lq:
+                        val = lq.group(1)
+                    else:
+                        it = re.fullmatch(r"\$(\w+)\s*\[\s*(?:(\d+)|'(\w+)')\s*\]", arg)
+                        if not it:
+                            return q.group(0)
+                        base = data.get(it.group(1))
+                        try:
+                            val = base[int(it.group(2))] if it.group(2) is not None else base[it.group(3)]
+                        except (TypeError, KeyError, IndexError):
+                            return q.group(0)
+                    if f not in _fns or f == "nl2br" or not isinstance(val, str) or not (val.isascii() or f in ("strlen", "trim")):
+                        return q.group(0)
+                    try:
+                        return _h2.escape(_fns[f](val))
+                    except ValueError:
+                        return q.group(0)
+                html = re.sub(r"\{\{\s*(\w+)\s*\(\s*('[^'\\]*'|\$\w+\s*\[[^\]]*\])\s*\)\s*\}\}", _fn1, html)
+                # {{ expr }} with integer/float arithmetic over literals and known $vars (e.g. {{ $n * 3 }}).
+                def _arith(q):
+                    if not re.search(r"[-+*/%]", q.group(1)):
+                        return q.group(0)
+                    r = _int_expr(q.group(1), data)
+                    return q.group(0) if r is None else _h2.escape(str(r))
+                html = re.sub(r"\{\{\s*([\w$\s+\-*/%().]+?)\s*\}\}", _arith, html)
             rq = []
             if html is not None:
                 def _rq(q):

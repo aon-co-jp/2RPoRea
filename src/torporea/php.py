@@ -768,13 +768,20 @@ def routes(root: str) -> list:
                         "trim": lambda x: x.strip(" \t\n\r\0\x0b"), "strlen": lambda x: str(len(x.encode("utf-8"))),
                         "strrev": lambda x: x[::-1], "nl2br": lambda x: x}
                 def _fn(q):
-                    f, val = q.group(1), data.get(q.group(2))
-                    if f == "count" and isinstance(val, list):
-                        return str(len(val))
-                    if f in _fns and f != "nl2br" and isinstance(val, str) and (val.isascii() or f in ("strlen", "trim")):
-                        return _h2.escape(_fns[f](val))
-                    return q.group(0)
-                html = re.sub(r"\{\{\s*(\w+)\(\s*\$(\w+)\s*\)\s*\}\}", _fn, html)
+                    # nested calls apply innermost first: {{ ucfirst(trim($k)) }}
+                    fs = re.findall(r"(\w+)\s*\(", q.group(1))
+                    if len(fs) != q.group(3).count(")"):
+                        return q.group(0)
+                    val = data.get(q.group(2))
+                    for f in reversed(fs):
+                        if f == "count" and isinstance(val, list):
+                            val = str(len(val))
+                        elif f in _fns and f != "nl2br" and isinstance(val, str) and (val.isascii() or f in ("strlen", "trim")):
+                            val = _fns[f](val)
+                        else:
+                            return q.group(0)
+                    return _h2.escape(val)
+                html = re.sub(r"\{\{\s*((?:\w+\s*\(\s*)+)\$(\w+)\s*((?:\)\s*)+)\}\}", _fn, html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None

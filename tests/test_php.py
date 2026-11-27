@@ -452,3 +452,12 @@ def test_view_php_parens(tmp_path):
     (v / "p.blade.php").write_text("@php($n = 3)@php($a = (2 + $n) * (4 - 1))@php $b = -(10 - 4) / 2; @endphp{{ $a }},{{ $b }}", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p"] == ("text", [("lit", "15,-3")])
+
+
+def test_view_fn_nested(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "f.blade.php").write_text("{{ ucfirst(trim($a)) }}|{{ strlen(trim($a)) }}|{{ strtoupper(count($xs)) }}", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f', ['a' => '  hi ', 'xs' => ['1']]);\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/f"] == ("text", [("lit", "Hi|2|1")])

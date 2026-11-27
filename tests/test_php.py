@@ -480,3 +480,12 @@ def test_view_request_value(tmp_path):
     (tmp_path / "resources/views/rq.blade.php").write_text("<p>{{ request('name', 'guest') }}</p>", encoding="utf-8")
     r = [x for x in php.routes(str(tmp_path)) if x[1] == "/rq"][0]
     assert r[3] == ("text", [("lit", "<p>"), ("query_esc", ("name", "guest")), ("lit", "</p>")])
+
+
+def test_view_numeric_functions(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/n', 'n');\n", encoding="utf-8")
+    (tmp_path / "resources/views/n.blade.php").write_text("@php($x = '-3.7')@php($y = '2.5'){{ abs($x) }} {{ floor($x) }} {{ ceil($x) }} {{ round($x) }} {{ intval($x) }} {{ round($y) }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/n"] == ("text", [("lit", "3.7 -4 -3 -4 -3 3")])

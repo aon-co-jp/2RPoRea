@@ -779,6 +779,26 @@ def routes(root: str) -> list:
                         "lcfirst": lambda x: x[:1].lower() + x[1:], "ucwords": lambda x: re.sub(r"(^|\s)(\S)", lambda q: q.group(1) + q.group(2).upper(), x),
                         "trim": lambda x: x.strip(" \t\n\r\0\x0b"), "strlen": lambda x: str(len(x.encode("utf-8"))),
                         "strrev": lambda x: x[::-1], "nl2br": lambda x: x}
+                def _num(op):
+                    def g(x):
+                        import math, decimal
+                        if not re.fullmatch(r"-?\d+(?:\.\d+)?", x):
+                            raise ValueError
+                        v = float(x) if "." in x else int(x)
+                        if op == "abs":
+                            r = abs(v)
+                        elif op == "intval":
+                            r = int(v)
+                        elif op == "floor":
+                            r = float(math.floor(v))
+                        elif op == "ceil":
+                            r = float(math.ceil(v))
+                        else:
+                            r = float(decimal.Decimal(x).quantize(decimal.Decimal(1), rounding=decimal.ROUND_HALF_UP))
+                        return str(r) if isinstance(r, int) else format(r, ".14g")
+                    return g
+                for _op in ("abs", "intval", "floor", "ceil", "round"):
+                    _fns[_op] = _num(_op)
                 # multi-argument calls over literals and known $vars: str_repeat, substr (ASCII), str_replace, implode, number_format(int)
                 def _fnargs(q):
                     f, raw = q.group(1), q.group(2)
@@ -822,7 +842,10 @@ def routes(root: str) -> list:
                         if f == "count" and isinstance(val, list):
                             val = str(len(val))
                         elif f in _fns and f != "nl2br" and isinstance(val, str) and (val.isascii() or f in ("strlen", "trim")):
-                            val = _fns[f](val)
+                            try:
+                                val = _fns[f](val)
+                            except ValueError:
+                                return q.group(0)
                         else:
                             return q.group(0)
                     return _h2.escape(val)

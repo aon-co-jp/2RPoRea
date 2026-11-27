@@ -393,6 +393,11 @@ def _expand_multi(b: str) -> str:
     return _MULTI.sub(rep, b)
 
 
+def _elseif(rest: str) -> str:
+    """`elseif (...)` / `else if (...)` after a branch: the rest is just another if."""
+    return re.sub(r"^\s*else\s*if\b|^\s*elseif\b", "if", rest, count=1)
+
+
 def translate(body: str, params: list):
     """('json', value) / ('text', parts) for a body made only of simple local assignments
     (`$x = EXPR;`) followed by one `return EXPR;`; or ('if', param, negate, literal, then, else) for
@@ -403,6 +408,7 @@ def translate(body: str, params: list):
         lit = _P(m.group(3), params, {}).value()
         then = translate(m.group(4), params)
         rest = b[m.end():]
+        rest = _elseif(rest)
         em = _ELSE.fullmatch(rest) if rest.strip().startswith("else") else None
         other = translate(em.group(1), params) if em else translate(rest, params)
         if then is None or other is None or lit[0] != "text" or any(k != "lit" for k, _ in lit[1]):
@@ -412,6 +418,7 @@ def translate(body: str, params: list):
     if m:
         then = translate(m.group(2), params)
         rest = b[m.end():]
+        rest = _elseif(rest)
         em = _ELSE.fullmatch(rest) if rest.strip().startswith("else") else None
         other = translate(em.group(1), params) if em else translate(rest, params)
         if then is None or other is None:
@@ -422,8 +429,9 @@ def translate(body: str, params: list):
     toks = _cond_tokens(pm[0]) if pm and ("(" in re.sub(r"->(?:has|filled|missing|boolean|input)\(", "", pm[0]) or "->input(" in pm[0]) else None
     if toks:
         then = translate(pm[1], params)
-        em = _ELSE.fullmatch(pm[2]) if pm[2].strip().startswith("else") else None
-        other = translate(em.group(1), params) if em else translate(pm[2], params)
+        rest = _elseif(pm[2])
+        em = _ELSE.fullmatch(rest) if rest.strip().startswith("else") else None
+        other = translate(em.group(1), params) if em else translate(rest, params)
         if then is None or other is None:
             return None
         return ("ifcond", toks, then, other)
@@ -431,6 +439,7 @@ def translate(body: str, params: list):
     if m:
         then = translate(m.group(4), params)
         rest = b[m.end():]
+        rest = _elseif(rest)
         em = _ELSE.fullmatch(rest) if rest.strip().startswith("else") else None
         other = translate(em.group(1), params) if em else translate(rest, params)
         if then is None or other is None:

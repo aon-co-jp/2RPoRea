@@ -281,3 +281,11 @@ def test_input_eq_condition(tmp_path):
         "<?php\nRoute::post('/e', function (Request $request) {\n    if ($request->input('m') === 'd' || $request->input('y') != 'z') { return 'hit'; }\n    return 'miss';\n});\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/e"]
     assert tr[0] == "ifcond" and [(n, k) for _, n, k, _ in tr[1]] == [(False, "eq"), (True, "eq")]
+
+
+def test_elseif(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::post('/e', function (Request $request) {\n    if ($request->has('a')) { return 'a'; } elseif ($request->has('b')) { return 'b'; } else { return 'c'; }\n});\n", encoding="utf-8")
+    tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/e"]
+    assert tr[0] == "ifhas" and tr[5][0] == "ifhas"

@@ -250,3 +250,7 @@
 ## 2026-11-27 23:19 入力値の比較条件 / Input comparisons in conditions
 **日本語**: 条件の中の `$request->input('k') === 'v'`(`==`・`!=`・`!==` も)を変換。かっこ・`&&`/`||` と組める。curl実測: `mode=dark`→hit、`mode=light`→miss、`x=1&y=a`→hit、`x=1&y=z`→miss。数値など文字列でないJSON値は文字列と等しくならない扱い(PHPの `==` の型変換とは違う点がある)。テスト45件。
 **English**: `$request->input('k') === 'v'` (also `==`, `!=`, `!==`) inside conditions translates and combines with parentheses and `&&`/`||`. Measured: `mode=dark` hit, `mode=light` miss, `x=1&y=a` hit, `x=1&y=z` miss. Non-string JSON values never equal a string (unlike PHP's loose `==` conversion). 45 tests.
+
+## 2026-11-27 23:21 elseif / else if
+**日本語**: `if (...) {...} elseif (...) {...} else if (...) {...} else {...}` の連鎖を、入れ子の if として変換。curl実測: `n=1`→one、`n=2`→two、`n=9`→many、`x=1`→none。テスト46件。
+**English**: Chains of `if / elseif / else if / else` translate as nested ifs. Measured: `n=1` one, `n=2` two, `n=9` many, `x=1` none. 46 tests.

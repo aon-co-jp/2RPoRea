@@ -234,3 +234,7 @@
 ## 2026-11-27 23:11 条件のかっこ / Parenthesized conditions
 **日本語**: `if (($request->has('a') || $request->has('b')) && !$request->filled('c'))` のように、`has`/`filled` を `&&`・`||`・`!`・かっこで組んだ条件を変換(かっこの対応を数えて切り出し、1語ずつ読む)。curl実測: `a=1`→yes、`b=1&c=`→yes、`b=1&c=x`→no、`c=1`→no。`!(...)` も可。テスト41件。`withInput` はセッションの仕組みが無いため未対応(501のまま)。
 **English**: Conditions built from `has`/`filled` with `&&`, `||`, `!` and parentheses now translate (balanced-paren split plus a small tokenizer). Measured with curl: `a=1` yes, `b=1&c=` yes, `b=1&c=x` no, `c=1` no. `!(...)` works too. 41 tests. `withInput` stays unsupported (501) because there is no session layer.
+
+## 2026-11-27 23:13 `$request->missing()` / missing()
+**日本語**: `$request->missing('k')`(=has の否定)を、単独・`&&`/`||`/かっこの条件の中で変換。curl実測: `a=1`→a-only、`x=1`→none、`a=1&b=2`→other。テスト42件。
+**English**: `$request->missing('k')` (the negation of has) translates alone and inside `&&`/`||`/parenthesized conditions. Measured with curl: `a=1` a-only, `x=1` none, `a=1&b=2` other. 42 tests.

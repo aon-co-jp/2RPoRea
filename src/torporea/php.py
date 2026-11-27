@@ -320,14 +320,14 @@ def _expr(src: str, params: list, env: dict):
 
 
 _IF = re.compile(r"\s*if\s*\(\s*\$(\w+)\s*(===?|!==?)\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\)\s*\{([^{}]*)\}\s*", re.S)
-_IFHAS = re.compile(r"\s*if\s*\(\s*(!?)\s*\$request->(has|filled)\(\s*'(\w+)'\s*\)\s*\)\s*\{([^{}]*)\}\s*", re.S)
-_ONE = r"!?\s*\$request->(?:has|filled)\(\s*'\w+'\s*\)"
+_IFHAS = re.compile(r"\s*if\s*\(\s*(!?)\s*\$request->(has|filled|missing)\(\s*'(\w+)'\s*\)\s*\)\s*\{([^{}]*)\}\s*", re.S)
+_ONE = r"!?\s*\$request->(?:has|filled|missing)\(\s*'\w+'\s*\)"
 _IFMULTI = re.compile(r"\s*if\s*\(\s*(" + _ONE + r"(?:\s*(?:&&|\|\|)\s*" + _ONE + r")+)\s*\)\s*\{([^{}]*)\}\s*", re.S)
-_ATOM = re.compile(r"(&&|\|\|)?\s*(!?)\s*\$request->(has|filled)\(\s*'(\w+)'\s*\)")
+_ATOM = re.compile(r"(&&|\|\|)?\s*(!?)\s*\$request->(has|filled|missing)\(\s*'(\w+)'\s*\)")
 _ELSE = re.compile(r"\s*else\s*\{([^{}]*)\}\s*$", re.S)
 
 
-_TOK = re.compile(r"\s*(&&|\|\||!|\(|\)|\$request->(has|filled)\(\s*'(\w+)'\s*\))")
+_TOK = re.compile(r"\s*(&&|\|\||!|\(|\)|\$request->(has|filled|missing)\(\s*'(\w+)'\s*\))")
 
 
 def _cond_tokens(s: str):
@@ -400,7 +400,7 @@ def translate(body: str, params: list):
         atoms = [(j or "", n == "!", k, key) for j, n, k, key in _ATOM.findall(m.group(1))]
         return ("ifcond", atoms, then, other)
     pm = _if_paren(b)
-    toks = _cond_tokens(pm[0]) if pm and "(" in re.sub(r"->(?:has|filled)\(", "", pm[0]) else None
+    toks = _cond_tokens(pm[0]) if pm and "(" in re.sub(r"->(?:has|filled|missing)\(", "", pm[0]) else None
     if toks:
         then = translate(pm[1], params)
         em = _ELSE.fullmatch(pm[2]) if pm[2].strip().startswith("else") else None
@@ -463,6 +463,8 @@ def translate(body: str, params: list):
 def _has_rs(kind: str, key: str) -> str:
     if kind == "has":
         return "input.contains_key(%s)" % _rs_str(key)
+    if kind == "missing":
+        return "!input.contains_key(%s)" % _rs_str(key)
     return "input.get(%s).is_some_and(|v| !matches!(v, serde_json::Value::Null) && v.as_str().map_or(true, |t| !t.trim().is_empty()))" % _rs_str(key)
 
 
@@ -492,8 +494,7 @@ def _leaf_rs(tr) -> str:
         cond = " ".join(")" if k == ")" else ("%s %s%s" % (j, "!" if n else "", "(" if k == "(" else _has_rs(k, key))).strip() for j, n, k, key in tr[1])
         return "if %s { %s } else { %s }" % (cond, _leaf_rs(tr[2]), _leaf_rs(tr[3]))
     if tr[0] == "ifhas":
-        # Laravel: has = key present; filled = present and not an empty string / null.
-        cond = "input.contains_key(%s)" % _rs_str(tr[2]) if tr[1] == "has" else             "input.get(%s).is_some_and(|v| !matches!(v, serde_json::Value::Null) && v.as_str().map_or(true, |t| !t.trim().is_empty()))" % _rs_str(tr[2])
+        cond = _has_rs(tr[1], tr[2])
         return "if %s%s { %s } else { %s }" % ("!" if tr[3] else "", cond, _leaf_rs(tr[4]), _leaf_rs(tr[5]))
     if tr[0] == "if":
         cmp_ = "!=" if tr[2] else "=="

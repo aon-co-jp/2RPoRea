@@ -249,3 +249,11 @@ def test_paren_conditions(tmp_path):
     rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     tr = rs["/c"]
     assert tr[0] == "ifcond" and [k for _, _, k, _ in tr[1]] == ["(", "has", "has", ")", "filled"]
+
+
+def test_missing(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::post('/m', function (Request $request) {\n    if ($request->missing('a')) { return 'none'; }\n    return 'got';\n});\n", encoding="utf-8")
+    tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/m"]
+    assert tr[0] == "ifhas" and tr[1] == "missing"

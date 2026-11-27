@@ -752,3 +752,12 @@ def test_view_comparison_ternary(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("{{ count($xs) > 1 ? 'many' : 'one' }}|{{ $u['age'] >= 10 ? 'adult' : 'kid' }}|{{ $ns[0] + $ns[1] == 10 ? 'ten' : 'no' }}|{{ count($xs) === 2 ? 'y' : 'n' }}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "many|kid|ten|y")])
+
+
+def test_view_if_comparison(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['xs' => ['a', 'b'], 'ns' => ['3', '7'], 'u' => ['age' => '9']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("@if(count($xs) > 1)M@else O@endif|@if($u['age'] >= 10)A@else K@endif|@if($ns[0] + $ns[1] == 10)T@endif", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "M| K|T")])

@@ -1282,6 +1282,26 @@ def routes(root: str) -> list:
                     ok = {"==": c == 0, "===": c == 0 and (num.fullmatch(l) is None) == (num.fullmatch(r) is None), "!=": c != 0, "!==": c != 0, "<": c < 0, ">": c > 0, "<=": c <= 0, ">=": c >= 0}[op]
                     return _h2.escape(q.group(4) if ok else q.group(5))
                 html = re.sub(r"\{\{\s*((?:[^{}?']|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^{}?']|\[\s*'\w+'\s*\])+?)\s*\?\s*'([^'\\]*)'\s*:\s*'([^'\\]*)'\s*\}\}", _ctern, html)
+                # @if(L op R) ... [@else ...] @endif with the same comparisons as the ternary (no nested @if in the body).
+                def _cmp(ls, op, rs):
+                    l, r = _val(ls), _val(rs)
+                    num = re.compile(r"-?\d+(?:\.\d+)?")
+                    if l is None or r is None:
+                        return None
+                    if num.fullmatch(l) and num.fullmatch(r):
+                        a, b = float(l), float(r)
+                        c = (a > b) - (a < b)
+                    elif op in ("===", "!==", "==", "!="):
+                        c = 0 if l == r else 1
+                    else:
+                        return None
+                    return {"==": c == 0, "===": c == 0 and (num.fullmatch(l) is None) == (num.fullmatch(r) is None), "!=": c != 0, "!==": c != 0, "<": c < 0, ">": c > 0, "<=": c <= 0, ">=": c >= 0}[op]
+                def _cif(q):
+                    ok = _cmp(q.group(1), q.group(2), q.group(3))
+                    if ok is None:
+                        return q.group(0)
+                    return q.group(4) if ok else (q.group(5) or "")
+                html = re.sub(r"@if\s*\(\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _cif, html, flags=re.S)
                 # {{ expr }} with integer/float arithmetic over literals and known $vars (e.g. {{ $n * 3 }}).
                 def _arith(q):
                     if not re.search(r"[-+*/%]", q.group(1)):

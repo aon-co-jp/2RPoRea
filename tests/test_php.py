@@ -461,3 +461,12 @@ def test_view_fn_nested(tmp_path):
     (v / "f.blade.php").write_text("{{ ucfirst(trim($a)) }}|{{ strlen(trim($a)) }}|{{ strtoupper(count($xs)) }}", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f', ['a' => '  hi ', 'xs' => ['1']]);\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/f"] == ("text", [("lit", "Hi|2|1")])
+
+
+def test_view_fn_args(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "f.blade.php").write_text("{{ str_repeat($a, 3) }}|{{ substr($w, -3) }}|{{ substr($w, 1, 2) }}|{{ str_replace('l', 'L', $w) }}|{{ implode(', ', $xs) }}|{{ number_format($n) }}", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f', ['a' => '<', 'w' => 'hello', 'xs' => ['a', 'b'], 'n' => '1234567']);\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/f"] == ("text", [("lit", "&lt;&lt;&lt;|llo|el|heLLo|a, b|1,234,567")])

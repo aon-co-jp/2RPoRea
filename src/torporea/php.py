@@ -767,6 +767,39 @@ def routes(root: str) -> list:
                         "lcfirst": lambda x: x[:1].lower() + x[1:], "ucwords": lambda x: re.sub(r"(^|\s)(\S)", lambda q: q.group(1) + q.group(2).upper(), x),
                         "trim": lambda x: x.strip(" \t\n\r\0\x0b"), "strlen": lambda x: str(len(x.encode("utf-8"))),
                         "strrev": lambda x: x[::-1], "nl2br": lambda x: x}
+                # multi-argument calls over literals and known $vars: str_repeat, substr (ASCII), str_replace, implode, number_format(int)
+                def _fnargs(q):
+                    f, raw = q.group(1), q.group(2)
+                    args = []
+                    for a in re.findall(r"""\s*('[^'\\]*'|"[^"\\$]*"|-?\d+|\$\w+)\s*(?:,|$)""", raw):
+                        args.append(data.get(a[1:]) if a[0] == "$" else (a[1:-1] if a[0] in "'\"" else int(a)))
+                    if ",".join(re.sub(r"\s", "", x) for x in re.findall(r"""'[^'\\]*'|"[^"\\$]*"|-?\d+|\$\w+""", raw)) != re.sub(r"\s", "", raw) or None in args:
+                        return q.group(0)
+                    try:
+                        if f == "str_repeat" and len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], int) and 0 <= args[1] <= 1000:
+                            r = args[0] * args[1]
+                        elif f == "substr" and len(args) in (2, 3) and isinstance(args[0], str) and args[0].isascii() and all(isinstance(x, int) for x in args[1:]):
+                            s0, st = args[0], args[1]
+                            st = max(len(s0) + st, 0) if st < 0 else st
+                            if st > len(s0):
+                                r = ""
+                            elif len(args) == 2:
+                                r = s0[st:]
+                            else:
+                                ln = args[2]
+                                r = s0[st:st + ln] if ln >= 0 else s0[st:len(s0) + ln]
+                        elif f == "str_replace" and len(args) == 3 and all(isinstance(x, str) for x in args) and args[0]:
+                            r = args[2].replace(args[0], args[1])
+                        elif f == "implode" and len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], list):
+                            r = args[0].join(args[1])
+                        elif f == "number_format" and len(args) == 1 and isinstance(args[0], str) and re.fullmatch(r"-?\d+", args[0]):
+                            r = f"{int(args[0]):,}"
+                        else:
+                            return q.group(0)
+                    except Exception:
+                        return q.group(0)
+                    return _h2.escape(r)
+                html = re.sub(r"\{\{\s*(\w+)\s*\(([^(){}]*,[^(){}]*|\s*\$\w+\s*)\)\s*\}\}", lambda q: _fnargs(q) if (q.group(1) != "number_format" or "," not in q.group(2)) else q.group(0), html)
                 def _fn(q):
                     # nested calls apply innermost first: {{ ucfirst(trim($k)) }}
                     fs = re.findall(r"(\w+)\s*\(", q.group(1))

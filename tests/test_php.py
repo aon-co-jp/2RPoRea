@@ -105,4 +105,4 @@ def test_request_input():
     assert translate("return $request->all();", []) is None
     assert translate("return $request->input($k);", []) is None
     s = render_main([("GET", "/q", [], t, "routes/web.php")])
-    assert 'query_param(&req, "who", "guest")' in s and "fn query_param(" in s
+    assert 'input.get("who").map(String::as_str).unwrap_or("guest")' in s and "async fn read_input(" in s

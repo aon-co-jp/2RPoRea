@@ -316,7 +316,7 @@ def _leaf_rs(tr) -> str:
         if k == "lit":
             return "s.push_str(%s);" % _rs_str(v)
         if k == "query":
-            return "s.push_str(&query_param(&req, %s, %s));" % (_rs_str(v[0]), _rs_str(v[1]))
+            return "s.push_str(input.get(%s).map(String::as_str).unwrap_or(%s));" % (_rs_str(v[0]), _rs_str(v[1]))
         return "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v)
     pieces = [piece(k, v) for k, v in tr[1]]
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
@@ -353,34 +353,56 @@ def _rs_str(s: str) -> str:
     return json.dumps(s, ensure_ascii=False)
 
 
-_QUERY_HELPER = r"""/// Laravel `$request->input('x', default)`: query-string value (%XX and + decoded), else the default.
-fn query_param(req: &Request, key: &str, default: &str) -> String {
-    fn dec(s: &str) -> String {
-        let b = s.as_bytes();
-        let mut out = Vec::with_capacity(b.len());
-        let mut i = 0;
-        while i < b.len() {
-            if b[i] == b'+' {
-                out.push(b' ');
-            } else if b[i] == b'%' && i + 3 <= b.len() {
-                match std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
-                    Some(v) => { out.push(v); i += 2; }
-                    None => out.push(b'%'),
-                }
-            } else {
-                out.push(b[i]);
+_QUERY_HELPER = r"""/// Laravel `$request->input()`: query string merged with the body (form-urlencoded or a JSON object; body wins),
+/// body capped at 1 MiB. Only built for handlers that read input.
+async fn read_input(req: Request) -> std::collections::HashMap<String, String> {
+    use http_body_util::BodyExt;
+    let mut input = hyper_compat::query_params(&req);
+    let ctype = req.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_ascii_lowercase();
+    let limited = http_body_util::Limited::new(req.into_body(), 1 << 20);
+    let Ok(body) = limited.collect().await.map(|c| c.to_bytes()) else { return input };
+    if ctype.starts_with("application/json") {
+        if let Ok(serde_json::Value::Object(m)) = serde_json::from_slice::<serde_json::Value>(&body) {
+            for (k, v) in m {
+                input.insert(k, match v { serde_json::Value::String(s) => s, other => other.to_string() });
             }
-            i += 1;
         }
-        String::from_utf8_lossy(&out).into_owned()
+    } else if ctype.starts_with("application/x-www-form-urlencoded") {
+        for kv in String::from_utf8_lossy(&body).split('&').filter(|kv| !kv.is_empty()) {
+            let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
+            input.insert(form_decode(k), form_decode(v));
+        }
     }
-    req.uri().query().unwrap_or("").split('&').filter_map(|kv| {
-        let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
-        (dec(k) == key).then(|| dec(v))
-    }).next().unwrap_or_else(|| default.to_string())
+    input
+}
+
+fn form_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'+' {
+            out.push(b' ');
+        } else if b[i] == b'%' && i + 3 <= b.len() {
+            match std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                Some(v) => { out.push(v); i += 2; }
+                None => out.push(b'%'),
+            }
+        } else {
+            out.push(b[i]);
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 """
+
+
+def _uses_input(tr) -> bool:
+    if tr[0] == "if":
+        return _uses_input(tr[4]) or _uses_input(tr[5])
+    return tr[0] == "text" and any(k == "query" for k, _ in tr[1])
 
 
 def render_main(rts: list) -> str:
@@ -392,6 +414,8 @@ def render_main(rts: list) -> str:
             body = "hyper_compat::text_response(StatusCode::NOT_IMPLEMENTED, \"text/plain; charset=utf-8\", %s)" % _rs_str(msg)
         else:
             body = _leaf_rs(tr)
+            if _uses_input(tr):
+                body = "let input = read_input(req).await;"+chr(10)+"    " + body
         fns.append("/// %s %s <- %s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(req: Request, params: Params) -> Response {\n    let _ = (&req, &params);\n    %s\n}\n" % (meth, path, src, name, body))
         helper = {"GET": "get", "POST": "post", "PUT": "put", "PATCH": "patch", "DELETE": "delete"}.get(meth)
         if helper:
@@ -417,7 +441,7 @@ def write(root: str, out: str, rpoem_path: str = "F:/RPoem") -> dict:
         f.write('[package]\nname = "php-ported"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\n'
                 'open-runo-poem-compat = { path = "%s/crates/open-runo-poem-compat" }\n'
                 'open-runo-poem-compat-macro = { path = "%s/crates/open-runo-poem-compat-macro" }\n'
-                'serde_json = "1"\ntokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }\n' % (rp, rp))
+                'http-body-util = "0.1"\nserde_json = "1"\ntokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }\n' % (rp, rp))
     with open(os.path.join(out, "src", "main.rs"), "w", encoding="utf-8", newline="\n") as f:
         f.write(render_main(rts))
     done = sum(1 for r in rts if r[3] is not None)

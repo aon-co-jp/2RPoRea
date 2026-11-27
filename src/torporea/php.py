@@ -408,6 +408,21 @@ def translate(body: str, params: list):
     (`$x = EXPR;`) followed by one `return EXPR;`; or ('if', param, negate, literal, then, else) for
     `if ($param == 'lit') { ... } [else { ... }]` on a route parameter followed by the rest. Else None."""
     b = _expand_multi(_strip_comments(body).strip())
+    vm = re.match(r"\$request\s*->\s*validate\(\s*(\[(?:[^\[\]]|\[[^\[\]]*\])*\])\s*\)\s*;", b, re.S)
+    if vm:
+        # $request->validate([...]) with simple string rules: on failure back() with the errors and the input
+        # (passwords not flashed), like Laravel; otherwise the rest of the body runs.
+        rules = _php_array(vm.group(1))
+        if not isinstance(rules, dict) or not rules:
+            return None
+        out = []
+        for k, v in rules.items():
+            rs = v.split("|") if isinstance(v, str) else v
+            if not isinstance(rs, list) or not all(isinstance(r, str) and re.fullmatch(r"required|string|numeric|integer|nullable|(?:min|max):\d+", r) for r in rs):
+                return None
+            out.append((k, rs))
+        inner = translate(b[vm.end():], params)
+        return None if inner is None else ("valid", out, inner)
     m = _IF.match(b)
     if m and m.group(1) in params:
         lit = _P(m.group(3), params, {}).value()
@@ -556,6 +571,10 @@ def _leaf_rs(tr) -> str:
         return "{ let mut r = { %s }; %s r }" % (_leaf_rs(tr[2]), sets)
     if tr[0] == "status":
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
+    if tr[0] == "valid":
+        arr = ", ".join("(%s, &[%s][..])" % (_rs_str(k), ", ".join(_rs_str(r) for r in rs)) for k, rs in tr[1])
+        back = "let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); let kept: std::collections::HashMap<String, serde_json::Value> = input.iter().filter(|(k, _)| !matches!(k.as_str(), \"password\" | \"password_confirmation\" | \"current_password\")).map(|(k, v)| (k.clone(), v.clone())).collect(); r.headers_mut().append(\"set-cookie\", flash_old_cookie(&kept).parse().unwrap()); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_err\", &serde_json::to_string(&errs).unwrap_or_default()).parse().unwrap()); r"
+        return "{ let rules: &[(&str, &[&str])] = &[%s]; let mut errs: Vec<(String, Vec<String>)> = Vec::new(); for (k, rs) in rules { let m = validate_field(&input, k, rs); if !m.is_empty() { errs.push((k.to_string(), m)); } } if !errs.is_empty() { %s } else { %s } }" % (arr, back, _leaf_rs(tr[2]))
     if tr[0] == "backx":
         inp, errs = tr[1], tr[2]
         code = "let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap()));"
@@ -1554,6 +1573,9 @@ def _resolve_names(tr, names):
     if tr[0] == "ifcond":
         a, b = _resolve_names(tr[2], names), _resolve_names(tr[3], names)
         return None if a is None or b is None else (tr[0], tr[1], a, b)
+    if tr[0] == "valid":
+        a = _resolve_names(tr[2], names)
+        return None if a is None else (tr[0], tr[1], a)
     return tr
 
 
@@ -1622,6 +1644,39 @@ fn flash_old_cookie(input: &std::collections::HashMap<String, serde_json::Value>
 }
 
 /// A flashed value (already JSON) as a short-lived percent-encoded cookie (not sent above 3 KiB).
+/// Laravel validation for one field (required / numeric / integer / string / nullable / min:N / max:N), default English messages.
+fn validate_field(input: &std::collections::HashMap<String, serde_json::Value>, key: &str, rules: &[&str]) -> Vec<String> {
+    let label = key.replace('_', " ");
+    let text = match input.get(key) {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::String(t)) => Some(t.trim().to_string()),
+        Some(o) => Some(o.to_string()),
+    };
+    let mut out = Vec::new();
+    let t = match text.filter(|t| !t.is_empty()) {
+        Some(t) => t,
+        None => {
+            if rules.contains(&"required") { out.push(format!("The {label} field is required.")); }
+            return out;
+        }
+    };
+    let num = t.parse::<f64>().ok().filter(|n| n.is_finite());
+    let by_num = num.is_some() && rules.iter().any(|r| *r == "numeric" || *r == "integer");
+    let size = if by_num { num.unwrap() } else { t.chars().count() as f64 };
+    for r in rules {
+        if *r == "numeric" && num.is_none() { out.push(format!("The {label} field must be a number.")); }
+        if *r == "integer" && t.parse::<i64>().is_err() { out.push(format!("The {label} field must be an integer.")); }
+        let unit = if by_num { "" } else { " characters" };
+        if let Some(n) = r.strip_prefix("min:") {
+            if size < n.parse::<f64>().unwrap_or(0.0) { out.push(format!("The {label} field must be at least {n}{unit}.")); }
+        }
+        if let Some(n) = r.strip_prefix("max:") {
+            if size > n.parse::<f64>().unwrap_or(0.0) { out.push(format!("The {label} field must not be greater than {n}{unit}.")); }
+        }
+    }
+    out
+}
+
 fn flash_cookie(name: &str, json: &str) -> String {
     let mut v = String::new();
     for b in json.bytes() {
@@ -1712,6 +1767,8 @@ def _uses_input(tr) -> bool:
         return len(tr) > 1
     if tr[0] == "backx":
         return tr[1] is not None
+    if tr[0] == "valid":
+        return True
     if tr[0] == "hdr":
         return _uses_input(tr[2])
     return tr[0] == "input_all" or (tr[0] == "text" and any(k in ("query", "query_esc") for k, _ in tr[1]))

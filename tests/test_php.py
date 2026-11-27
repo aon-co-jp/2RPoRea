@@ -851,3 +851,14 @@ def test_errors_any_has_all(tmp_path):
     assert "errs_all(&errs)" in src and "!errs.is_empty()" in src
     # the flashed bag keeps the given order (z before a), as Laravel's MessageBag does
     assert '[[\\"z\\", [\\"Z\\"]], [\\"a\\", [\\"A\\"]]]' in src
+
+
+def test_request_validate_simple_rules(tmp_path):
+    from torporea import php
+    tr = php.translate("$request->validate(['name' => 'required|max:5', 'age' => 'integer']); return 'ok';", [])
+    assert tr[0] == "valid" and tr[1] == [("name", ["required", "max:5"]), ("age", ["integer"])]
+    rs = php._leaf_rs(tr)
+    assert "validate_field(&input" in rs and "rporea_err" in rs and "password_confirmation" in rs
+    assert php._uses_input(tr)
+    # unknown rules stay a 501 TODO
+    assert php.translate("$request->validate(['e' => 'email']); return 'ok';", []) is None

@@ -471,3 +471,12 @@ def test_view_fn_args(tmp_path):
     (v / "f.blade.php").write_text("{{ str_repeat($a, 3) }}|{{ substr($w, -3) }}|{{ substr($w, 1, 2) }}|{{ str_replace('l', 'L', $w) }}|{{ implode(', ', $xs) }}|{{ number_format($n) }}", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f', ['a' => '<', 'w' => 'hello', 'xs' => ['a', 'b'], 'n' => '1234567']);\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/f"] == ("text", [("lit", "&lt;&lt;&lt;|llo|el|heLLo|a, b|1,234,567")])
+
+
+def test_view_request_value(tmp_path):
+    import torporea.php as php
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/rq', 'rq');\n", encoding="utf-8")
+    (tmp_path / "resources/views/rq.blade.php").write_text("<p>{{ request('name', 'guest') }}</p>", encoding="utf-8")
+    r = [x for x in php.routes(str(tmp_path)) if x[1] == "/rq"][0]
+    assert r[3] == ("text", [("lit", "<p>"), ("query_esc", ("name", "guest")), ("lit", "</p>")])

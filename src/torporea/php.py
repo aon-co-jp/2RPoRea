@@ -564,6 +564,8 @@ def _leaf_rs(tr) -> str:
             return "s.push_str(%s);" % _rs_str(v)
         if k == "query":
             return "s.push_str(&input.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string()));" % (_rs_str(v[0]), _rs_str(v[1]))
+        if k == "query_esc":
+            return "s.push_str(&input.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string()).replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\"));" % (_rs_str(v[0]), _rs_str(v[1]))
         return "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v)
     pieces = [piece(k, v) for k, v in tr[1]]
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
@@ -824,6 +826,12 @@ def routes(root: str) -> list:
                             return q.group(0)
                     return _h2.escape(val)
                 html = re.sub(r"\{\{\s*((?:\w+\s*\(\s*)+)\$(\w+)\s*((?:\)\s*)+)\}\}", _fn, html)
+            rq = []
+            if html is not None:
+                def _rq(q):
+                    rq.append((q.group(2), q.group(4) or ""))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"\{\{\s*request\(\s*(['\"])(\w+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _rq, html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None
@@ -831,7 +839,16 @@ def routes(root: str) -> list:
                 html = html.replace("\x00LB\x00", "{{")
             if "{" in full:
                 continue
-            out.append(("GET", full, [], ("text", [("lit", html)]) if html is not None else None, os.path.relpath(vf, root).replace(os.sep, "/")))
+            tr_v = None
+            if html is not None:
+                tparts = []
+                for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
+                    if i % 2:
+                        tparts.append(("query_esc", rq[int(seg)]))
+                    elif seg:
+                        tparts.append(("lit", seg))
+                tr_v = ("text", tparts or [("lit", "")])
+            out.append(("GET", full, [], tr_v, os.path.relpath(vf, root).replace(os.sep, "/")))
         for m in re.finditer(r"Route::(redirect|permanentRedirect)\s*\(\s*(['\"])(.*?)\2\s*,\s*(['\"])(.*?)\4\s*(?:,\s*(\d{3})\s*)?\)", t, re.S):
             full = (prefix + "/" + m.group(3).strip("/")).rstrip("/") or "/"
             if "{" in full or "{" in m.group(5):
@@ -980,7 +997,7 @@ def _uses_input(tr) -> bool:
         return _uses_input(tr[2])
     if tr[0] == "hdr":
         return _uses_input(tr[2])
-    return tr[0] == "input_all" or (tr[0] == "text" and any(k == "query" for k, _ in tr[1]))
+    return tr[0] == "input_all" or (tr[0] == "text" and any(k in ("query", "query_esc") for k, _ in tr[1]))
 
 
 def render_main(rts: list) -> str:

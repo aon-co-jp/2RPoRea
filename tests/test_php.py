@@ -725,3 +725,12 @@ def test_view_str_pad_sprintf(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("{{ str_pad($n, 3, '0', STR_PAD_LEFT) }}|{{ str_pad('ab', 5, '-', STR_PAD_BOTH) }}|{{ sprintf('%03d', $n) }}|{{ sprintf('%.2f/%5s/%-3s|', 3.14159, 'x', 'y') }}{{ sprintf('%d%%', 50) }}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "002|-ab--|002|3.14/    x/y  |50%")])
+
+
+def test_view_function_args_from_items(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['xs' => ['a', 'b'], 'ns' => ['3', '7'], 'u' => ['age' => '9']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("{{ sprintf('%s-%03d', $xs[0], $u['age']) }}|{{ max($ns[0], $ns[1]) }}|{{ str_pad($xs[1], 3, '*') }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "a-009|7|b**")])

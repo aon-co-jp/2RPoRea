@@ -110,3 +110,4 @@
 - 08:22 データなしビューの計算式にも対応、curlで実測。 / Arithmetic in views without data, measured with curl.
 - 08:24 配列の関数(`max`・`min`・`end`・`reset`・`array_sum`・`in_array`の三項)に対応、curlで実測。 / Array helpers, measured with curl.
 - 08:25 `str_pad`・`sprintf` に対応、curlで実測。 / `str_pad` and `sprintf`, measured with curl.
+- 08:27 関数の引数に配列の要素(`$xs[0]`・`$u['k']`)を使えるように、curlで実測。 / Array items as function arguments, measured with curl.

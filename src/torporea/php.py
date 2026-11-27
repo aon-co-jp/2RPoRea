@@ -1110,6 +1110,13 @@ def routes(root: str) -> list:
                         return m1.group(1)
                     if re.fullmatch(r"-?\d+(?:\.\d+)?", t):
                         return t
+                    m1 = re.fullmatch(r"\$(\w+)\s*\[\s*(?:(\d+)|'(\w+)')\s*\]", t)
+                    if m1:
+                        base = data.get(m1.group(1))
+                        try:
+                            return base[int(m1.group(2))] if m1.group(2) is not None else base[m1.group(3)]
+                        except (TypeError, KeyError, IndexError):
+                            return None
                     m1 = re.fullmatch(r"\$(\w+)", t)
                     if m1 and m1.group(1) in data:
                         return data[m1.group(1)]

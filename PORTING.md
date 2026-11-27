@@ -210,3 +210,7 @@
 ## 2026-11-27 23:02 パラメーター付き名前付きルートへの転送 / Named routes with parameters
 **日本語**: `redirect()->route('users.show', ['id' => $id])`(値はルートパラメーターか文字列リテラル)を、`{id}` を埋めたパスへの302に変換。足りないパラメーター・余ったキー(Laravelはクエリ文字列にする)は501。curl実測: `/me/42` → `302` で `/users/42`。テスト36件。
 **English**: `redirect()->route('users.show', ['id' => $id])` (values are route parameters or string literals) now becomes a 302 to the path with `{id}` filled in. Missing parameters or extra keys (Laravel turns them into a query string) stay 501. Measured with curl: `/me/42` gives `302` to `/users/42`. 36 tests.
+
+## 2026-11-27 22:57 余ったキーをクエリ文字列へ / Extra keys become a query string
+**日本語**: 名前付きルートへの転送で、パスに無いキーを Laravel と同じくクエリ文字列として付ける(値は文字列リテラルのみ、RFC 3986 でエンコード)。curl実測: `/me2/7` → `302` で `/users/7?tab=a%20b`。値がルートパラメーターの余りは501。テスト37件。
+**English**: For named-route redirects, keys not in the path are appended as a query string like Laravel (string-literal values only, RFC 3986 encoded). Measured with curl: `/me2/7` gives `302` to `/users/7?tab=a%20b`. Extra keys whose value is a route parameter stay 501. 37 tests.

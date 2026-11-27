@@ -505,8 +505,11 @@ def _resolve_names(tr, names):
                 parts.append(args.pop(pm.group(1)))
             else:
                 return None
-        if args:  # Laravel appends leftovers as a query string; not reproduced
-            return None
+        if args:  # Laravel appends leftover keys as a query string; literal values only
+            if any(k != "lit" for k, _ in args.values()):
+                return None
+            from urllib.parse import quote
+            parts.append(("lit", "?" + "&".join("%s=%s" % (quote(k, safe=""), quote(v, safe="")) for k, (_, v) in args.items())))
         return ("redirect", parts[0][1]) if all(k == "lit" for k, _ in parts) and len(parts) == 1 else ("redirectp", parts)
     if tr[0] in ("if", "ifhas"):
         a, b = _resolve_names(tr[4], names), _resolve_names(tr[5], names)

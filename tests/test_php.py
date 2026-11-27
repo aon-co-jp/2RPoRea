@@ -194,3 +194,13 @@ def test_redirect_route_params(tmp_path):
         "Route::get('/bad', function () { return to_route('users.show'); });\n", encoding="utf-8")
     rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert rs["/me/:id"] == ("redirectp", [("lit", "/users/"), ("param", "id")]) and rs["/bad"] is None
+
+
+def test_redirect_route_extra_query(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::get('/u/{id}', function ($id) { return 'u'; })->name('u');\n"
+        "Route::get('/a/{id}', function ($id) { return to_route('u', ['id' => $id, 'tab' => 'a b']); });\n"
+        "Route::get('/b/{id}', function ($id) { return to_route('u', ['id' => '1', 'x' => $id]); });\n", encoding="utf-8")
+    rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert rs["/a/:id"] == ("redirectp", [("lit", "/u/"), ("param", "id"), ("lit", "?tab=a%20b")]) and rs["/b/:id"] is None

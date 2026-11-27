@@ -317,3 +317,14 @@ def test_view_at_escape(tmp_path):
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/a', 'a');\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/a"]
     assert tr == ("text", [("lit", "<p>{{ x }}</p>")])
+
+
+def test_view_if_isset(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "c.blade.php").write_text("@if($a)A@else B@endif|@isset($b)b@endisset", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::view('/c', 'c', ['a' => '0', 'b' => '']);\nRoute::view('/d', 'c', ['b' => 'x']);\n", encoding="utf-8")
+    rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert rs["/c"] == ("text", [("lit", " B|b")]) and rs["/d"] is None

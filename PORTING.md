@@ -266,3 +266,7 @@
 ## 2026-11-27 23:29 Bladeの @{{ }} / Blade @{{ }} escape
 **日本語**: ビューの `@{{ x }}`(JS等のために `{{ x }}` をそのまま出すBladeの書き方)を文字どおり出力。curl実測: `<p>@{{ name }} {{ $n }}</p>` → `<p>{{ name }} N</p>`。テスト49件。
 **English**: Blade's `@{{ x }}` (print `{{ x }}` literally, e.g. for JS templates) is emitted as is. Measured: `<p>@{{ name }} {{ $n }}</p>` gives `<p>{{ name }} N</p>`. 49 tests.
+
+## 2026-11-27 23:31 Bladeの @if/@isset(固定データ) / Blade @if/@isset with literal data
+**日本語**: `Route::view` の固定データで、ビューの `@if($k) ... @else ... @endif` と `@isset($k) ... @endisset` を変換時に決める(PHPと同じく '' と '0' は偽)。データに無いキーの `@if` や、他のBlade制御構文が残るビューは501のまま(行の途中の `@if` 等も検出するよう強化)。curl実測: vip='0'→guest、vip='yes'→VIP、`@isset` は渡したキーだけ表示。テスト50件。
+**English**: With `Route::view` literal data, `@if($k) ... @else ... @endif` and `@isset($k) ... @endisset` are decided at convert time ('' and '0' are false, as in PHP). Views with `@if` on unknown keys or other Blade control directives stay 501 (inline directives are now detected too). Measured: vip='0' guest, vip='yes' VIP, `@isset` shows only passed keys. 50 tests.

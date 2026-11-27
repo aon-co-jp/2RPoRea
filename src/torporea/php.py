@@ -593,11 +593,20 @@ def routes(root: str) -> list:
                         break
                     data[mm.group(1)] = mm.group(2)
                 if html is not None:
+                    # @if($k) / @isset($k) ... [@else ...] @endif / @endisset with literal data: decided at convert time
+                    # (PHP truthiness of a string: '' and '0' are false). Unknown keys keep the block (stays 501).
+                    def _blk(mm):
+                        k = mm.group(2)
+                        if mm.group(1) == "if" and k not in data:
+                            return mm.group(0)
+                        ok = (k in data) if mm.group(1) == "isset" else data[k] not in ("", "0")
+                        return mm.group(3) if ok else (mm.group(4) or "")
+                    html = re.sub(r"@(if|isset)\s*\(\s*\$(\w+)\s*\)(.*?)(?:@else(.*?))?@end(?:if|isset)\b", _blk, html, flags=re.S)
                     html = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda mm: _h.escape(data[mm.group(1)]) if mm.group(1) in data else mm.group(0), html)
                     # {!! $key !!} prints the value unescaped, as Blade does.
                     html = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda mm: data[mm.group(1)] if mm.group(1) in data else mm.group(0), html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
-            if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html)):
+            if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None
             if html is not None:
                 html = html.replace("\x00LB\x00", "{{")

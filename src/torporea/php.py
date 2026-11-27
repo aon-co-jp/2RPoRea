@@ -145,6 +145,15 @@ class _P:
         if k == "var" and v == "$request" and self.t[self.i + 1:self.i + 5] == [("op", "->"), ("word", "all"), ("op", "("), ("op", ")")]:
             self.i += 5
             return ("input_all",)
+        if k == "var" and v == "$request" and self.t[self.i + 1:self.i + 3] and self.t[self.i + 1] == ("op", "->") and self.t[self.i + 2] in (("word", "only"), ("word", "except")):
+            mode = self.t[self.i + 2][1]
+            self.i += 3
+            self.take("(")
+            arr = self.value()
+            self.take(")")
+            if arr[0] != "json" or not isinstance(arr[1], list) or not all(isinstance(x, str) for x in arr[1]):
+                raise _Unsupported("$request->%s needs a list of literal keys" % mode)
+            return ("input_all", mode, list(arr[1]))
         if v == "[":
             return ("json", self.array())
         if k == "word" and v.lower() in ("true", "false", "null"):
@@ -316,7 +325,11 @@ def _leaf_rs(tr) -> str:
         cmp_ = "!=" if tr[2] else "=="
         return "if params.get(%s).unwrap_or(\"\") %s %s { %s } else { %s }" % (_rs_str(tr[1]), cmp_, _rs_str(tr[3]), _leaf_rs(tr[4]), _leaf_rs(tr[5]))
     if tr[0] == "input_all":
-        return "hyper_compat::json_response(StatusCode::OK, &input)"
+        if len(tr) == 1:
+            return "hyper_compat::json_response(StatusCode::OK, &input)"
+        keys = ", ".join(_rs_str(k) for k in tr[2])
+        keep = "" if tr[1] == "only" else "!"
+        return "{ let keys: &[&str] = &[%s]; let picked: std::collections::HashMap<&String, &String> = input.iter().filter(|(k, _)| %skeys.contains(&k.as_str())).collect(); hyper_compat::json_response(StatusCode::OK, &picked) }" % (keys, keep)
     if tr[0] == "json":
         return "hyper_compat::json_response(StatusCode::OK, &serde_json::from_str::<serde_json::Value>(%s).unwrap())" % _rs_str(json.dumps(tr[1], ensure_ascii=False))
     def piece(k, v):

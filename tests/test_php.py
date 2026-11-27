@@ -113,3 +113,11 @@ def test_request_all():
     assert translate("return $request->all() . 'x';", []) is None
     s = render_main([("POST", "/echo", [], ("input_all",), "routes/web.php")])
     assert "let input = read_input(req).await;" in s and "json_response(StatusCode::OK, &input)" in s
+
+
+def test_request_only_except():
+    assert translate("return response()->json($request->only(['a', 'c']));", []) == ("input_all", "only", ["a", "c"])
+    assert translate("return $request->except(['a']);", []) == ("input_all", "except", ["a"])
+    assert translate("return $request->only($keys);", []) is None
+    s = render_main([("POST", "/o", [], ("input_all", "except", ["a"]), "routes/web.php")])
+    assert "let input = read_input(req).await;" in s and "!keys.contains" in s

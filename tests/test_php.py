@@ -422,3 +422,12 @@ def test_view_php_expr(tmp_path):
     (v / "p.blade.php").write_text("@php $a = 'x'; $b = $a . \"-y\"; $n = 2; $m = $n + 3 - 1; @endphp{{ $b }}{{ $m }}", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p"] == ("text", [("lit", "x-y4")])
+
+
+def test_view_fn(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "f.blade.php").write_text("{{ strtoupper($a) }}|{{ ucfirst($a) }}|{{ strlen($j) }}|{{ count($xs) }}", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f', ['a' => 'ab<', 'j' => '日本', 'xs' => ['1', '2']]);\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/f"] == ("text", [("lit", "AB&lt;|Ab&lt;|6|2")])

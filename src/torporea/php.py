@@ -721,6 +721,20 @@ def routes(root: str) -> list:
                 html = re.sub(r"""\{\{\s*\$(\w+)\s*\?\?\s*(?:'([^'\\]*)'|"([^"\\$]*)")\s*\}\}""",
                               lambda q: _h2.escape(_d[q.group(1)] if isinstance(_d.get(q.group(1)), str)
                                                    else (q.group(2) if q.group(2) is not None else q.group(3))), html)
+            if html is not None:
+                # {{ fn($k) }} for a few pure PHP string functions over literal data (escaped); count() for lists.
+                _fns = {"strtoupper": str.upper, "strtolower": str.lower, "ucfirst": lambda x: x[:1].upper() + x[1:],
+                        "lcfirst": lambda x: x[:1].lower() + x[1:], "ucwords": lambda x: re.sub(r"(^|\s)(\S)", lambda q: q.group(1) + q.group(2).upper(), x),
+                        "trim": lambda x: x.strip(" \t\n\r\0\x0b"), "strlen": lambda x: str(len(x.encode("utf-8"))),
+                        "strrev": lambda x: x[::-1], "nl2br": lambda x: x}
+                def _fn(q):
+                    f, val = q.group(1), data.get(q.group(2))
+                    if f == "count" and isinstance(val, list):
+                        return str(len(val))
+                    if f in _fns and f != "nl2br" and isinstance(val, str) and (val.isascii() or f in ("strlen", "trim")):
+                        return _h2.escape(_fns[f](val))
+                    return q.group(0)
+                html = re.sub(r"\{\{\s*(\w+)\(\s*\$(\w+)\s*\)\s*\}\}", _fn, html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None

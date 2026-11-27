@@ -443,7 +443,7 @@ def test_view_php_muldiv(tmp_path):
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\nRoute::view('/q', 'q');\n", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/p"] == ("text", [("lit", "14,2,-1")])
-    assert r["/q"] is None
+    assert r["/q"] == ("text", [("lit", "3.5")])
 
 
 def test_view_php_parens(tmp_path):

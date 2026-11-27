@@ -626,12 +626,13 @@ def routes(root: str) -> list:
                         if not q:
                             return None
                         # RHS: literals and already-known $vars joined by '.' (concat) or by '+'/'-' (integers).
-                        if "(" in q.group(2):
+                        if "(" in q.group(2) or ("'" not in q.group(2) and '"' not in q.group(2)):
                             r = _int_expr(q.group(2), data)
-                            if r is None:
+                            if r is not None:
+                                data[q.group(1)] = r
+                                continue
+                            if "(" in q.group(2):
                                 return None
-                            data[q.group(1)] = r
-                            continue
                         term = r"""'[^'\\]*'|"[^"\\$]*"|-?\d+|\$\w+"""
                         toks = re.findall(r"\s*(" + term + r")\s*([.+*/%-]|$)", q.group(2))
                         if not toks or toks[-1][1] or re.sub(r"\s", "", q.group(2)) != "".join(re.sub(r"\s", "", a) + o for a, o in toks):
@@ -1050,18 +1051,18 @@ def _int_expr(src, data):
     """Evaluate a PHP integer expression with + - * / % and parentheses over literals and known $vars.
 
     Returns the decimal text, or None when it is not purely integer or PHP would differ (inexact /, division by 0)."""
-    toks = re.findall(r"\s*(\d+|\$\w+|[-+*/%()])", src)
+    toks = re.findall(r"\s*(\d+\.\d+|\d+|\$\w+|[-+*/%()])", src)
     if re.sub(r"\s", "", src) != "".join(toks):
         return None
     vals = []
     for t in toks:
         if t[0] == "$":
             v = data.get(t[1:])
-            if not isinstance(v, str) or not re.fullmatch(r"-?\d+", v):
+            if not isinstance(v, str) or not re.fullmatch(r"-?\d+(?:\.\d+)?", v):
                 return None
-            vals.append(int(v))
+            vals.append(float(v) if "." in v else int(v))
         else:
-            vals.append(int(t) if t.isdigit() else t)
+            vals.append(int(t) if t.isdigit() else float(t) if t[0].isdigit() else t)
     pos = [0]
 
     class _Bad(Exception):
@@ -1085,7 +1086,7 @@ def _int_expr(src, data):
             return -atom()
         if t == "+":
             return atom()
-        if isinstance(t, int):
+        if isinstance(t, (int, float)):
             return t
         raise _Bad
 
@@ -1095,8 +1096,10 @@ def _int_expr(src, data):
             o, x = take(), atom()
             if o == "*":
                 r *= x
-            elif x == 0 or (o == "/" and r % x):
+            elif x == 0 or (o == "%" and (isinstance(r, float) or isinstance(x, float))):
                 raise _Bad
+            elif o == "/" and (isinstance(r, float) or isinstance(x, float) or r % x):
+                r = r / x
             elif o == "/":
                 r = r // x if (r >= 0) == (x > 0) else -(abs(r) // abs(x))
             else:
@@ -1114,4 +1117,10 @@ def _int_expr(src, data):
         r = add()
     except (_Bad, IndexError):
         return None
-    return str(r) if pos[0] == len(vals) else None
+    if pos[0] != len(vals):
+        return None
+    if isinstance(r, float):
+        if r != r or abs(r) >= 1e14 or (r != 0 and abs(r) < 1e-4):
+            return None
+        return format(r, ".14g")
+    return str(r)

@@ -82,3 +82,18 @@ def test_locals_rejects():
     assert translate("$x = 'a'; if ($x) { return 'b'; }", []) is None
     assert translate("$name = 'z'; return $name;", ["name"]) is None
     assert translate("$x = 'a;b'; return $x . 'c';", []) == ("text", [("lit", "a;b"), ("lit", "c")])
+
+
+def test_if_on_route_parameter():
+    t = translate("if ($name === 'admin') { return 'Hello boss'; } return 'Hi ' . $name;", ["name"])
+    assert t == ("if", "name", False, "admin", ("text", [("lit", "Hello boss")]), ("text", [("lit", "Hi "), ("param", "name")]))
+    t2 = translate("if ($n != \"a\") { return ['ok' => true]; } else { return 'a'; }", ["n"])
+    assert t2[:4] == ("if", "n", True, "a") and t2[4] == ("json", {"ok": True})
+    # chained: the rest is itself an if
+    t3 = translate("if ($n == 'a') { return '1'; } if ($n == 'b') { return '2'; } return '3';", ["n"])
+    assert t3[5][0] == "if"
+    # not a route parameter, or a body with logic inside: still 501
+    assert translate("if ($x == 'a') { return '1'; } return '2';", ["n"]) is None
+    assert translate("if ($n == 'a') { foo(); return '1'; } return '2';", ["n"]) is None
+    s = render_main([("GET", "/w/:name", ["name"], t, "routes/web.php")])
+    assert 'if params.get("name").unwrap_or("") == "admin" {' in s and "} else {" in s

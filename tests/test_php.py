@@ -97,3 +97,12 @@ def test_if_on_route_parameter():
     assert translate("if ($n == 'a') { foo(); return '1'; } return '2';", ["n"]) is None
     s = render_main([("GET", "/w/:name", ["name"], t, "routes/web.php")])
     assert 'if params.get("name").unwrap_or("") == "admin" {' in s and "} else {" in s
+
+
+def test_request_input():
+    t = translate("$who = $request->input('who', 'guest'); return 'Hi ' . $who . ' ' . request('n');", [])
+    assert t == ("text", [("lit", "Hi "), ("query", ("who", "guest")), ("lit", " "), ("query", ("n", ""))])
+    assert translate("return $request->all();", []) is None
+    assert translate("return $request->input($k);", []) is None
+    s = render_main([("GET", "/q", [], t, "routes/web.php")])
+    assert 'query_param(&req, "who", "guest")' in s and "fn query_param(" in s

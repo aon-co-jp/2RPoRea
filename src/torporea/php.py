@@ -173,6 +173,29 @@ class _P:
                 parts.extend(self.env[v[1:]][1])
             elif k == "var" and v[1:] in self.params:
                 parts.append(("param", v[1:]))
+            elif (k == "var" and v == "$request" and self.peek()[1] == "->") or (k == "word" and v == "request" and self.peek()[1] == "("):
+                # $request->input('x'[, 'def']) / ->query / ->get / request('x'[, 'def']) -> query-string value
+                if v == "$request":
+                    self.take("->")
+                    _, meth = self.take()
+                    if meth not in ("input", "query", "get"):
+                        raise _Unsupported("$request->" + str(meth))
+                self.take("(")
+                k2, name = self.take()
+                if k2 != "str":
+                    raise _Unsupported("request key")
+                default = ""
+                if self.peek()[1] == ",":
+                    self.take(",")
+                    k3, d = self.take()
+                    if k3 == "str":
+                        default = _unquote(d)
+                    elif k3 == "num":
+                        default = d
+                    else:
+                        raise _Unsupported("request default")
+                self.take(")")
+                parts.append(("query", (_unquote(name), default)))
             else:
                 raise _Unsupported(str(v))
             if self.peek()[1] != ".":
@@ -289,7 +312,13 @@ def _leaf_rs(tr) -> str:
         return "if params.get(%s).unwrap_or(\"\") %s %s { %s } else { %s }" % (_rs_str(tr[1]), cmp_, _rs_str(tr[3]), _leaf_rs(tr[4]), _leaf_rs(tr[5]))
     if tr[0] == "json":
         return "hyper_compat::json_response(StatusCode::OK, &serde_json::from_str::<serde_json::Value>(%s).unwrap())" % _rs_str(json.dumps(tr[1], ensure_ascii=False))
-    pieces = ["s.push_str(%s);" % _rs_str(v) if k == "lit" else "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v) for k, v in tr[1]]
+    def piece(k, v):
+        if k == "lit":
+            return "s.push_str(%s);" % _rs_str(v)
+        if k == "query":
+            return "s.push_str(&query_param(&req, %s, %s));" % (_rs_str(v[0]), _rs_str(v[1]))
+        return "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v)
+    pieces = [piece(k, v) for k, v in tr[1]]
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
 
 
@@ -324,6 +353,36 @@ def _rs_str(s: str) -> str:
     return json.dumps(s, ensure_ascii=False)
 
 
+_QUERY_HELPER = r"""/// Laravel `$request->input('x', default)`: query-string value (%XX and + decoded), else the default.
+fn query_param(req: &Request, key: &str, default: &str) -> String {
+    fn dec(s: &str) -> String {
+        let b = s.as_bytes();
+        let mut out = Vec::with_capacity(b.len());
+        let mut i = 0;
+        while i < b.len() {
+            if b[i] == b'+' {
+                out.push(b' ');
+            } else if b[i] == b'%' && i + 3 <= b.len() {
+                match std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                    Some(v) => { out.push(v); i += 2; }
+                    None => out.push(b'%'),
+                }
+            } else {
+                out.push(b[i]);
+            }
+            i += 1;
+        }
+        String::from_utf8_lossy(&out).into_owned()
+    }
+    req.uri().query().unwrap_or("").split('&').filter_map(|kv| {
+        let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
+        (dec(k) == key).then(|| dec(v))
+    }).next().unwrap_or_else(|| default.to_string())
+}
+
+"""
+
+
 def render_main(rts: list) -> str:
     fns, ats, by_path = [], [], {}
     for i, (meth, path, params, tr, src) in enumerate(rts):
@@ -333,7 +392,7 @@ def render_main(rts: list) -> str:
             body = "hyper_compat::text_response(StatusCode::NOT_IMPLEMENTED, \"text/plain; charset=utf-8\", %s)" % _rs_str(msg)
         else:
             body = _leaf_rs(tr)
-        fns.append("/// %s %s <- %s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(_req: Request, params: Params) -> Response {\n    let _ = &params;\n    %s\n}\n" % (meth, path, src, name, body))
+        fns.append("/// %s %s <- %s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(req: Request, params: Params) -> Response {\n    let _ = (&req, &params);\n    %s\n}\n" % (meth, path, src, name, body))
         helper = {"GET": "get", "POST": "post", "PUT": "put", "PATCH": "patch", "DELETE": "delete"}.get(meth)
         if helper:
             by_path.setdefault(path, []).append("%s(%s())" % (helper, name))
@@ -343,7 +402,7 @@ def render_main(rts: list) -> str:
     return ("//! 2RPoRea が PHP(Laravel) から生成した RPoem サーバー。訳せた return だけ本体あり、他は 501。\n"
             "#![allow(unused_variables, unused_imports, dead_code)]\n"
             "use open_runo_poem_compat::{delete, get, hyper_compat, patch, post, put, Params, Request, Response, Route, Server, StatusCode, TcpListener};\n\n"
-            + "\n".join(fns) +
+            + _QUERY_HELPER + "\n".join(fns) +
             "\n#[tokio::main]\nasync fn main() {\n    let port: u16 = std::env::var(\"PORT\").ok().and_then(|p| p.parse().ok()).unwrap_or(3002);\n"
             "    let app = Route::new()\n" + "\n".join(ats) + ";\n"
             "    let (addr, handle) = Server::new(TcpListener::bind(([127, 0, 0, 1], port))).run(app).await.expect(\"bind\");\n"

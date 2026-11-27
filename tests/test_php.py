@@ -227,3 +227,14 @@ def test_route_view_static(tmp_path):
         "<?php\nRoute::view('/about', 'pages.about');\nRoute::view('/dyn', 'pages.dyn');\n", encoding="utf-8")
     rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert rs["/about"] == ("text", [("lit", "<h1>About</h1>\n")]) and rs["/dyn"] is None
+
+
+def test_route_view_with_data(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "hi.blade.php").write_text("<h1>Hi {{ $name }}</h1>", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::view('/hi', 'hi', ['name' => 'T <&>']);\nRoute::view('/hj', 'hi', ['name' => $x]);\n", encoding="utf-8")
+    rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert rs["/hi"] == ("text", [("lit", "<h1>Hi T &lt;&amp;&gt;</h1>")]) and rs["/hj"] is None

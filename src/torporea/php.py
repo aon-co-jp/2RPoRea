@@ -473,10 +473,22 @@ def routes(root: str) -> list:
             prev = [pth for st, pth in starts if st < nm.start()]
             if prev:
                 names.setdefault(nm.group(2), prev[-1])
-        for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*\)", t, re.S):
+        for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*(?:,\s*\[([^\]]*)\])?\s*\)", t, re.S):
             full = (prefix + "/" + m.group(2).strip("/")).rstrip("/") or "/"
             vf = os.path.join(root, "resources", "views", *m.group(4).split(".")) + ".blade.php"
             html = open(vf, encoding="utf-8").read() if os.path.exists(vf) else None
+            if html is not None and m.group(5):
+                # Route::view data: literal 'key' => 'value' pairs fill {{ $key }} (HTML-escaped, as Blade does).
+                import html as _h
+                data = {}
+                for kv in [x for x in m.group(5).split(",") if x.strip()]:
+                    mm = re.fullmatch(r"\s*'(\w+)'\s*=>\s*'([^'\\]*)'\s*", kv)
+                    if not mm:
+                        html = None
+                        break
+                    data[mm.group(1)] = mm.group(2)
+                if html is not None:
+                    html = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda mm: _h.escape(data[mm.group(1)]) if mm.group(1) in data else mm.group(0), html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html)):
                 html = None

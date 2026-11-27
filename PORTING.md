@@ -226,3 +226,7 @@
 ## 2026-11-27 23:06 `Route::view` (静的ビューのみ / static views only)
 **日本語**: `Route::view('/about', 'pages.about')` を `resources/views/pages/about.blade.php` の内容を返すGETルートへ変換。Blade構文(`{{ }}`・`{!! !!}`・`@ディレクティブ`)を含むビューは501(TODO)のまま。curl実測: `/about`→HTML、`/dyn`→501。テスト39件。
 **English**: `Route::view('/about', 'pages.about')` becomes a GET route returning `resources/views/pages/about.blade.php`. Views with Blade syntax (`{{ }}`, `{!! !!}`, `@directives`) stay 501 (TODO). Measured with curl: `/about` returns the HTML, `/dyn` returns 501. 39 tests.
+
+## 2026-11-27 23:08 `Route::view` のデータ / Route::view data
+**日本語**: `Route::view('/hi', 'hi', ['name' => '値'])`(値は文字列リテラル)で、ビューの `{{ $name }}` をBladeと同じくHTMLエスケープして埋め込む。curl実測: `Taro <&>` → `Hi Taro &lt;&amp;&gt;`。値が変数のもの・他のBlade構文は501。テスト40件。
+**English**: `Route::view('/hi', 'hi', ['name' => 'value'])` (string-literal values) fills `{{ $name }}` in the view, HTML-escaped as Blade does. Measured with curl: `Taro <&>` gives `Hi Taro &lt;&amp;&gt;`. Variable values and other Blade syntax stay 501. 40 tests.

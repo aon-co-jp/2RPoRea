@@ -726,14 +726,18 @@ def routes(root: str) -> list:
                             keys, xs = [str(i) for i in range(len(data[k]))], data[k]
                         else:
                             return mm.group(0)
+                        pre = mm.string[:mm.start()]
+                        depth = len(re.findall(r"@foreach\b", pre)) - len(re.findall(r"@endforeach\b", pre)) + 1
                         def _one(i, x):
                             # $loop->index/iteration/count/remaining/first/last, as Blade's $loop.
                             lp = {"index": str(i), "iteration": str(i + 1), "count": str(len(xs)), "remaining": str(len(xs) - i - 1),
                                   "first": "1" if i == 0 else "", "last": "1" if i == len(xs) - 1 else "",
-                                  "odd": "1" if (i + 1) % 2 else "", "even": "" if (i + 1) % 2 else "1"}
+                                  "odd": "1" if (i + 1) % 2 else "", "even": "" if (i + 1) % 2 else "1", "depth": str(depth)}
                             b = re.sub(r"@if\s*\(\s*(!?)\$loop->(first|last|odd|even)\s*\)(.*?)(?:@else(.*?))?@endif\b",
                                        lambda q: q.group(3) if bool(lp[q.group(2)]) != (q.group(1) == "!") else (q.group(4) or ""), body, flags=re.S)
-                            b = re.sub(r"\{\{\s*\$loop->(index|iteration|count|remaining)\s*\}\}", lambda q: lp[q.group(1)], b)
+                            b = re.sub(r"\{\{\s*\$loop->(index|iteration|count|remaining|depth)\s*\}\}", lambda q: lp[q.group(1)], b)
+                            # $loop->parent->X refers to the enclosing loop, which is unrolled later: hand it over as $loop->X.
+                            b = b.replace("$loop->parent->", "$loop->")
                             if kk:
                                 b = re.sub(r"\{\{\s*\$" + kk + r"\s*\}\}", lambda _m: _h.escape(keys[i]), b)
                             b = re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", lambda _m: _h.escape(x), b)

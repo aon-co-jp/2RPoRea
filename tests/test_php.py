@@ -588,3 +588,12 @@ def test_view_nested_foreach(tmp_path):
     (tmp_path / "resources/views/n.blade.php").write_text("@foreach($rs as $r)@foreach($cs as $c){{ $c }}@endforeach{{ $r }};@endforeach", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/n"] == ("text", [("lit", "ab1;ab2;")])
+
+
+def test_view_loop_depth_parent(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/d', 'd', ['rs' => ['1', '2'], 'cs' => ['a']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/d.blade.php").write_text("@foreach($rs as $r)@foreach($cs as $c){{ $loop->depth }}{{ $loop->parent->iteration }}@endforeach{{ $loop->depth }};@endforeach", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/d"] == ("text", [("lit", "211;221;")])

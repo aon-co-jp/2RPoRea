@@ -258,3 +258,7 @@
 ## 2026-11-27 23:23 ルートパラメーターの比較を複合条件で / Route params in compound conditions
 **日本語**: `if ($kind === 'a' && $request->has('x') || $kind !== 'b')` のように、ルートパラメーターと文字列の比較を `&&`/`||`/かっこの条件に混ぜられるようにした(パラメーターでない変数は対象外)。curl実測: `/pe/a?x=1`→ok、`/pe/a`→ok、`/pe/b`→ng、`/pe/c`→ok。テスト47件。
 **English**: Comparisons of a route parameter with a string can now mix into `&&`/`||`/parenthesized conditions (non-parameter variables stay unsupported). Measured: `/pe/a?x=1` ok, `/pe/a` ok, `/pe/b` ng, `/pe/c` ok. 47 tests.
+
+## 2026-11-27 23:27 Bladeのコメントと {!! !!} / Blade comments and raw output
+**日本語**: ビューの `{{-- コメント --}}` を取り除き、`Route::view` のデータで `{!! $k !!}`(エスケープしない)を埋めるようにした。curl実測: `<b>x</b>` が `{!! !!}` ではそのまま、`{{ }}` では `&lt;b&gt;x&lt;/b&gt;`。テスト48件。
+**English**: Blade comments `{{-- --}}` are removed, and `Route::view` data fills `{!! $k !!}` unescaped. Measured: `<b>x</b>` stays raw in `{!! !!}` and becomes `&lt;b&gt;x&lt;/b&gt;` in `{{ }}`. 48 tests.

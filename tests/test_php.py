@@ -297,3 +297,13 @@ def test_param_eq_condition(tmp_path):
         "<?php\nRoute::post('/p/{k}', function (Request $request, $k) {\n    if ($k === 'a' && $request->has('x')) { return 'ok'; }\n    return 'ng';\n});\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p/:k"] if "/p/:k" in {p for _, p, _, _, _ in routes(str(tmp_path))} else next(tr for _, p, _, tr, _ in routes(str(tmp_path)) if p.startswith("/p/"))
     assert tr[0] == "ifcond" and [k for _, _, k, _ in tr[1]] == ["peq", "has"]
+
+
+def test_view_raw_and_comment(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "r.blade.php").write_text("{{-- c --}}<p>{!! $x !!}|{{ $x }}</p>", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/r', 'r', ['x' => '<b>']);\n", encoding="utf-8")
+    tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/r"]
+    assert tr == ("text", [("lit", "<p><b>|&lt;b&gt;</p>")])

@@ -577,6 +577,9 @@ def routes(root: str) -> list:
             full = (prefix + "/" + m.group(2).strip("/")).rstrip("/") or "/"
             vf = os.path.join(root, "resources", "views", *m.group(4).split(".")) + ".blade.php"
             html = open(vf, encoding="utf-8").read() if os.path.exists(vf) else None
+            if html is not None:
+                # Blade comments {{-- ... --}} never reach the output.
+                html = re.sub(r"\{\{--.*?--\}\}", "", html, flags=re.S)
             if html is not None and m.group(5):
                 # Route::view data: literal 'key' => 'value' pairs fill {{ $key }} (HTML-escaped, as Blade does).
                 import html as _h
@@ -589,6 +592,8 @@ def routes(root: str) -> list:
                     data[mm.group(1)] = mm.group(2)
                 if html is not None:
                     html = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda mm: _h.escape(data[mm.group(1)]) if mm.group(1) in data else mm.group(0), html)
+                    # {!! $key !!} prints the value unescaped, as Blade does.
+                    html = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda mm: data[mm.group(1)] if mm.group(1) in data else mm.group(0), html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html)):
                 html = None

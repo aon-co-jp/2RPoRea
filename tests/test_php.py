@@ -770,3 +770,12 @@ def test_view_if_comparison_nested(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("@if(count($xs) > 1)[@if($u['age'] >= 10)A@else K@endif]@else O@endif", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "[ K]")])
+
+
+def test_view_elseif_comparison(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['xs' => ['a', 'b'], 'ns' => ['3', '7'], 'u' => ['age' => '9']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("@if(count($xs) > 5)A@elseif($u['age'] >= 10)B@elseif($ns[0] == 3)C@else D@endif|@if(count($xs) > 5)A@elseif(count($xs) > 9)B@endif.", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "C|.")])

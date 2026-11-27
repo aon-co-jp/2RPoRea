@@ -1301,6 +1301,11 @@ def routes(root: str) -> list:
                     if ok is None:
                         return q.group(0)
                     return q.group(4) if ok else (q.group(5) or "")
+                # @if(...) ... @elseif(...) ... [@else ...] @endif (no nested @if): rewritten as nested @if/@else so the comparison loop below resolves it.
+                def _elif(q):
+                    n = len(re.findall(r"@elseif\b", q.group(0)))
+                    return re.sub(r"@elseif\b", "@else@if", q.group(0)[:-len("@endif")]) + "@endif" * (n + 1)
+                html = re.sub(r"@if\b(?:(?!@if\b|@endif\b).)*?@elseif\b(?:(?!@if\b|@endif\b).)*?@endif\b", _elif, html, flags=re.S)
                 for _ in range(8):
                     _prev = html
                     html = re.sub(r"@if\s*\(\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _cif, html, flags=re.S)

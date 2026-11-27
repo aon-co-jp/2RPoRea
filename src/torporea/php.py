@@ -773,6 +773,18 @@ def routes(root: str) -> list:
                 html = re.sub(r"""\{\{\s*\$(\w+)\s*\?\?\s*(?:'([^'\\]*)'|"([^"\\$]*)")\s*\}\}""",
                               lambda q: _h2.escape(_d[q.group(1)] if isinstance(_d.get(q.group(1)), str)
                                                    else (q.group(2) if q.group(2) is not None else q.group(3))), html)
+                # {{ $k ? 'a' : 'b' }} and {{ $k ?: 'b' }} over known data, with PHP truthiness ("" and "0" and [] are false).
+                def _tern(q):
+                    v = _d.get(q.group(1))
+                    if v is None:
+                        return q.group(0)
+                    truthy = bool(v) and v != "0"
+                    if q.group(2) is None:
+                        if not truthy:
+                            return _h2.escape(q.group(4))
+                        return _h2.escape(v) if isinstance(v, str) else q.group(0)
+                    return _h2.escape(q.group(2) if truthy else q.group(4))
+                html = re.sub(r"""\{\{\s*\$(\w+)\s*\?\s*(?:'([^'\\]*)'\s*)?:\s*('([^'\\]*)')\s*\}\}""", _tern, html)
             if html is not None:
                 # {{ fn($k) }} for a few pure PHP string functions over literal data (escaped); count() for lists.
                 _fns = {"strtoupper": str.upper, "strtolower": str.lower, "ucfirst": lambda x: x[:1].upper() + x[1:],

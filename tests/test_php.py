@@ -516,3 +516,12 @@ def test_view_number_format_separators(tmp_path):
     (tmp_path / "resources/views/n.blade.php").write_text("{{ number_format('1234567.891', 2, ',', '.') }} {{ number_format('1234.5', 2, ',') }}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/n"] == ("text", [("lit", "1.234.567,89 1,234,50")])
+
+
+def test_view_ternary(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/t', 't');\n", encoding="utf-8")
+    (tmp_path / "resources/views/t.blade.php").write_text("@php($a = 'x')@php($z = '0'){{ $a ? 'yes' : 'no' }} {{ $z ? 'yes' : 'no' }} {{ $a ?: 'd' }} {{ $z ?: 'd' }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/t"] == ("text", [("lit", "yes no x d")])

@@ -151,3 +151,11 @@ def test_redirect():
     assert translate("return redirect($to);", []) is None
     s = render_main([("GET", "/o", [], ("redirect", "/n"), "routes/web.php")])
     assert "StatusCode::FOUND" in s and '"/n".parse()' in s
+
+
+def test_back():
+    assert translate("return back();", []) == ("back",)
+    assert translate("return redirect()->back();", []) == ("back",)
+    t = translate("if (!$request->filled('t')) { return back(); } return 'ok';", [])
+    s = render_main([("POST", "/s", [], t, "routes/web.php")])
+    assert s.index("let back_referer") < s.index("let input = read_input")

@@ -337,6 +337,8 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
+        if re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))", stmts[-1]):
+            return ("back",)
         rd = re.fullmatch(r"return\s+redirect\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\)(?:\s*->\s*to\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\))?", stmts[-1], re.S)
         if rd:
             target = rd.group(1) if rd.group(1) else rd.group(2)
@@ -361,6 +363,8 @@ def _has_rs(kind: str, key: str) -> str:
 
 
 def _leaf_rs(tr) -> str:
+    if tr[0] == "back":
+        return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r }"
     if tr[0] == "redirect":
         return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", %s.parse().unwrap()); r }" % _rs_str(tr[1])
     if tr[0] == "abort":
@@ -493,6 +497,8 @@ def render_main(rts: list) -> str:
             body = _leaf_rs(tr)
             if _uses_input(tr):
                 body = "let input = read_input(req).await;"+chr(10)+"    " + body
+            if "back_referer" in body:
+                body = "let back_referer = req.headers().get(\"referer\").and_then(|v| v.to_str().ok()).unwrap_or(\"/\").to_string();"+chr(10)+"    " + body
         fns.append("/// %s %s <- %s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(req: Request, params: Params) -> Response {\n    let _ = (&req, &params);\n    %s\n}\n" % (meth, path, src, name, body))
         helper = {"GET": "get", "POST": "post", "PUT": "put", "PATCH": "patch", "DELETE": "delete"}.get(meth)
         if helper:

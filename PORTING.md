@@ -190,3 +190,7 @@
 ## 2026-11-27 23:30 `return redirect('/path')`
 **日本語**: 固定パスへの `return redirect('/path')` を 302 + `Location` 応答へ変換。curl実測: `/old` → `302`、転送先 `/new`。テスト31件。`redirect()->route(...)`・変数・`back()` は未対応(501)。
 **English**: `return redirect('/path')` to a fixed path now becomes a 302 with a `Location` header. Measured with curl: `/old` gives `302` to `/new`. 31 tests. `redirect()->route(...)`, variables and `back()` are not supported (501).
+
+## 2026-11-27 23:40 `back()` / `redirect()->back()`
+**日本語**: `return back();`・`return redirect()->back();` を、`Referer` の先へ302(無ければ `/`)に変換。入力を読む処理より先に `Referer` を控える。curl実測: 空送信→`302` で元のページ、値あり→`saved`。テスト32件。Laravelのセッション経由の入力引き継ぎ(`withInput`)は未対応。
+**English**: `return back();` and `return redirect()->back();` now 302 to the `Referer` (or `/` when absent); the referer is captured before the input is read. Measured with curl: empty submit gives `302` back to the page, a value gives `saved`. 32 tests. Laravel's session-based input flashing (`withInput`) is not supported.

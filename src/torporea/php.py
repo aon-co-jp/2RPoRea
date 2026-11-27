@@ -722,6 +722,19 @@ def routes(root: str) -> list:
                         data[v] = str(i)
                         return "".join(out)
                     html = re.sub(r"@while\s*\(\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*(-?\d+)\s*\)(.*?)@endwhile\b", _while, html, flags=re.S)
+                    # @for bounds/starts from view data: count($xs) and integer $n are substituted, then unrolled as literals.
+                    def _forh(q):
+                        def _v(t):
+                            c = re.fullmatch(r"count\(\s*\$(\w+)\s*\)", t)
+                            if c and isinstance(data.get(c.group(1)), (list, dict)):
+                                return str(len(data[c.group(1)]))
+                            c = re.fullmatch(r"\$(\w+)", t)
+                            if c and isinstance(data.get(c.group(1)), str) and re.fullmatch(r"-?\d+", data[c.group(1)]):
+                                return data[c.group(1)]
+                            return t
+                        return "@for($" + q.group(1) + " = " + _v(q.group(2).strip()) + "; $" + q.group(3) + " " + q.group(4) + " " + _v(q.group(5).strip()) + ";" + q.group(6) + ")"
+                    html = re.sub(r"@for\s*\(\s*\$(\w+)\s*=\s*([^;]+?);\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*([^;]+?);([^)]*)\)", _forh, html)
+                    html = re.sub(r"@for\s*\(\s*\$(\w+)\s*=\s*(-?\d+)\s*;\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*(-?\d+)\s*;\s*\$(\w+)\s*(\+\+|--|\+=|-=)\s*(\d*)\s*\)(.*?)@endfor\b", _for, html, flags=re.S)
                 if html is not None:
                     # @if($k) / @isset($k) ... [@else ...] @endif / @endisset with literal data: decided at convert time
                     # (PHP truthiness of a string: '' and '0' are false). Unknown keys keep the block (stays 501).

@@ -651,3 +651,12 @@ def test_view_for_steps(tmp_path):
     (tmp_path / "resources/views/f.blade.php").write_text("@for($i = 5; $i > 0; $i -= 2){{ $i }},@endfor|@for($i = 0; $i <= 6; $i += 3){{ $i }}@endfor|@for($i=3;$i>=1;$i--){{ $i }}@endfor", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/f"] == ("text", [("lit", "5,3,1,|036|321")])
+
+
+def test_view_for_bounds_from_data(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['xs' => ['a', 'b', 'c'], 'n' => '2']);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("@for($i = 0; $i < count($xs); $i++){{ $i }}@endfor|@for($i = $n; $i >= 0; $i--){{ $i }}@endfor", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "012|210")])

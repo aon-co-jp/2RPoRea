@@ -137,3 +137,4 @@ pip install .                      # 開発中 / under development
 **English**: More of `Route::view` and Blade is now resolved at convert time: numbers (floats, `abs`/`intval`/`floor`/`ceil`/`round`/`number_format`), ternaries and comparisons, `request('k')` (escaped), array indexes, associative and nested arrays, `@foreach` (keys, every `$loop` value, `parent`, nesting, `$loop` and `@continue`/`@break` in loops unrolled from the outside) and `@forelse`. All measured with curl against the converted server; 84 tests pass. Anything unresolved stays a 501 TODO. Open: `withInput` (needs a session layer).
 
 - 08:14 `@for` の減少・刻み(`$i--`・`+= N`・`-= N`、`>`/`>=`/`!=`)に対応、curlで実測。 / `@for` counting down and steps supported, measured with curl.
+- 08:15 `@for` の範囲に `count($xs)`・整数データ `$n` を使えるように、curlで実測。 / `@for` bounds from `count($xs)` and integer `$n`, measured with curl.

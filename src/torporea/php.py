@@ -783,6 +783,25 @@ def routes(root: str) -> list:
                                 on = {"first": i == 0, "last": i == len(xs) - 1, "odd": (i + 1) % 2 == 1, "even": (i + 1) % 2 == 0}[c.group(2)]
                                 return on != (c.group(1) == "!")
                             raise ValueError
+                        def _top(t):
+                            # mask nested @foreach ... @endforeach blocks (same length) so only top-level directives are seen.
+                            out, lvl = list(t), 0
+                            pos = 0
+                            for tm in re.finditer(r"@(end)?foreach\b", t):
+                                if lvl:
+                                    out[pos:tm.start()] = " " * (tm.start() - pos)
+                                lvl += -1 if tm.group(1) else 1
+                                if lvl:
+                                    out[tm.start():tm.end()] = " " * (tm.end() - tm.start())
+                                else:
+                                    out[tm.start():tm.end()] = " " * (tm.end() - tm.start())
+                                pos = tm.end()
+                            return "".join(out)
+                        def _strip_cb(t):
+                            m = _top(t)
+                            for d in reversed(list(re.finditer(r"@(continue|break)\b(?:\s*\([^()]*\))?", m))):
+                                t = t[:d.start()] + t[d.end():]
+                            return t
                         parts = []
                         for i, x in enumerate(xs):
                             try:
@@ -790,7 +809,7 @@ def routes(root: str) -> list:
                             except ValueError:
                                 return mm.group(0)
                             stop = False
-                            for d in re.finditer(r"@(continue|break)\b(?:\s*\(([^()]*)\))?", t):
+                            for d in re.finditer(r"@(continue|break)\b(?:\s*\(([^()]*)\))?", _top(t)):
                                 try:
                                     if not _hit(d.group(2), i, x):
                                         continue
@@ -798,7 +817,7 @@ def routes(root: str) -> list:
                                     return mm.group(0)
                                 t, stop = t[:d.start()], d.group(1) == "break"
                                 break
-                            t = re.sub(r"@(continue|break)\b(?:\s*\([^()]*\))?", "", t)
+                            t = _strip_cb(t)
                             parts.append(t)
                             if stop:
                                 break
@@ -826,7 +845,7 @@ def routes(root: str) -> list:
                                         end = (hm.end() + tm.start(), hm.end() + tm.end())
                                         break
                                 inner = html[hm.end():end[0]] if end else ""
-                                if not end or re.search(r"@(continue|break)\b", "".join(re.findall(r"@foreach\b.*@endforeach\b", inner, flags=re.S))):
+                                if not end:
                                     continue
                                 class _M:
                                     string = html

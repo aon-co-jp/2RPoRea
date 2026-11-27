@@ -785,6 +785,24 @@ def routes(root: str) -> list:
                         return _h2.escape(v) if isinstance(v, str) else q.group(0)
                     return _h2.escape(q.group(2) if truthy else q.group(4))
                 html = re.sub(r"""\{\{\s*\$(\w+)\s*\?\s*(?:'([^'\\]*)'\s*)?:\s*('([^'\\]*)')\s*\}\}""", _tern, html)
+                # {{ $k OP 'lit' ? 'a' : 'b' }} with == != === !== < > <= >= (PHP 8 string comparison: numeric strings compare as numbers).
+                def _cmpt(q):
+                    v, op, lit = _d.get(q.group(1)), q.group(2), (q.group(3) if q.group(3) is not None else q.group(4))
+                    if not isinstance(v, str):
+                        return q.group(0)
+                    num = r"\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s*"
+                    if op in ("===", "!=="):
+                        c = 0 if (v == lit and q.group(4) is None) else 1
+                    elif q.group(4) is not None and not re.fullmatch(num, v):
+                        return q.group(0)
+                    elif re.fullmatch(num, v) and re.fullmatch(num, lit):
+                        a, b = float(v), float(lit)
+                        c = (a > b) - (a < b)
+                    else:
+                        c = (v > lit) - (v < lit) if op not in ("==", "!=") else (0 if v == lit else 1)
+                    ok = {"==": c == 0, "===": c == 0, "!=": c != 0, "!==": c != 0, "<": c < 0, ">": c > 0, "<=": c <= 0, ">=": c >= 0}[op]
+                    return _h2.escape(q.group(5) if ok else q.group(6))
+                html = re.sub(r"""\{\{\s*\$(\w+)\s*(===|!==|==|!=|<=|>=|<|>)\s*(?:'([^'\\]*)'|(-?\d+(?:\.\d+)?))\s*\?\s*'([^'\\]*)'\s*:\s*'([^'\\]*)'\s*\}\}""", _cmpt, html)
             if html is not None:
                 # {{ fn($k) }} for a few pure PHP string functions over literal data (escaped); count() for lists.
                 _fns = {"strtoupper": str.upper, "strtolower": str.lower, "ucfirst": lambda x: x[:1].upper() + x[1:],

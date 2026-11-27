@@ -746,7 +746,12 @@ def routes(root: str) -> list:
                             return mm.group(0)
                         return mm.group(4) if not v else "@foreach(" + mm.group(1) + ")" + mm.group(3) + "@endforeach"
                     html = re.sub(r"@forelse\s*\(\s*(\$(\w+)\s+as\s+[^)]*)\)(.*?)@empty\b(.*?)@endforelse\b", _forelse, html, flags=re.S)
-                    html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+(?:\$(\w+)\s*=>\s*)?\$(\w+)\s*\)(.*?)@endforeach\b", _each, html, flags=re.S)
+                    # Innermost loops first, so nested @foreach over separate literal arrays unrolls too.
+                    while True:
+                        prev = html
+                        html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+(?:\$(\w+)\s*=>\s*)?\$(\w+)\s*\)((?:(?!@foreach\b).)*?)@endforeach\b", _each, html, flags=re.S)
+                        if html == prev:
+                            break
                     # @switch($k) @case('v') ... @break ... @default ... @endswitch with a literal scalar: picked at convert time.
                     def _sw(mm):
                         k = mm.group(1)

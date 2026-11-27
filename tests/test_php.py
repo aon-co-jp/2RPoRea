@@ -579,3 +579,12 @@ def test_view_loop_odd_even(tmp_path):
     (tmp_path / "resources/views/o.blade.php").write_text("@foreach($xs as $x)@if($loop->odd)O@else{{ '' }}E@endif@endforeach".replace("{{ '' }}", ""), encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/o"] == ("text", [("lit", "OEO")])
+
+
+def test_view_nested_foreach(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/n', 'n', ['rs' => ['1', '2'], 'cs' => ['a', 'b']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/n.blade.php").write_text("@foreach($rs as $r)@foreach($cs as $c){{ $c }}@endforeach{{ $r }};@endforeach", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/n"] == ("text", [("lit", "ab1;ab2;")])

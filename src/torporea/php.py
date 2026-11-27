@@ -1313,6 +1313,15 @@ def routes(root: str) -> list:
                     n = len(re.findall(r"@elseif\b", q.group(0)))
                     return re.sub(r"@elseif\b", "@else@if", q.group(0)[:-len("@endif")]) + "@endif" * (n + 1)
                 html = re.sub(r"@if\b(?:(?!@if\b|@endif\b).)*?@elseif\b(?:(?!@if\b|@endif\b).)*?@endif\b", _elif, html, flags=re.S)
+                # plain @if($k) left over (e.g. from @elseif($k)): PHP truthiness of literal data, as a comparison the loop below resolves.
+                def _ptruth(q):
+                    v = data.get(q.group(1))
+                    if isinstance(v, (list, dict)):
+                        return "@if(1 == " + ("1" if v else "0") + ")"
+                    if isinstance(v, str):
+                        return "@if(1 == " + ("0" if v in ("", "0") else "1") + ")"
+                    return q.group(0)
+                html = re.sub(r"@if\s*\(\s*\$(\w+)\s*\)", _ptruth, html)
                 for _ in range(8):
                     _prev = html
                     html = re.sub(r"@if\s*\(\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _cif, html, flags=re.S)

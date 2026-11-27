@@ -152,3 +152,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 入れ子の比較 @if に対応 / nested comparison @if (98 tests, /nz measured).
 - 2026-11-28 @elseif の比較式に対応 / comparisons in @elseif (99 tests, /ez measured).
 - 2026-11-28 単純な @if($k) と @elseif の不具合を修正 / fixed plain @if($k) with @elseif (100 tests, /pz measured).
+- 2026-11-28 単純な変数の @elseif に対応 / plain-variable @elseif (101 tests, /vz measured).

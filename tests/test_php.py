@@ -788,3 +788,12 @@ def test_view_plain_if_with_elseif(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("@if($z)A@elseif($u['age'] >= 1)B@else C@endif|@if($xs)A@elseif($u['age'] >= 1)B@else C@endif|@if($z)A@elseif($u['age'] >= 100)B@else C@endif", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "B|A| C")])
+
+
+def test_view_elseif_plain_var(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['xs' => ['a', 'b'], 'z' => '0']);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("@if(count($xs) > 5)A@elseif($z)B@elseif($xs)C@else D@endif", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "C")])

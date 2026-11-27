@@ -413,3 +413,12 @@ def test_view_while(tmp_path):
     (v / "w.blade.php").write_text("@php($i = 0)@while($i < 3)[{{ $i }}]@php($i++)@endwhile{{ $i }}", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/w', 'w');\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/w"] == ("text", [("lit", "[0][1][2]3")])
+
+
+def test_view_php_expr(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "p.blade.php").write_text("@php $a = 'x'; $b = $a . \"-y\"; $n = 2; $m = $n + 3 - 1; @endphp{{ $b }}{{ $m }}", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p"] == ("text", [("lit", "x-y4")])

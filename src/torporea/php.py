@@ -611,11 +611,36 @@ def routes(root: str) -> list:
                 # @php($x = 'v') and @php $x = 'v'; ... @endphp with only literal string assignments set view data.
                 def _php(code):
                     for st in [x.strip() for x in code.split(";") if x.strip()]:
-                        q = re.fullmatch(r"""\$(\w+)\s*=\s*(?:'([^'\\]*)'|"([^"\\$]*)"|(-?\d+))""", st)
+                        q = re.fullmatch(r"\$(\w+)\s*=\s*(.+)", st, re.S)
                         if not q:
                             return None
-                        # an integer literal prints as its decimal text; 0 is falsy, like PHP
-                        data[q.group(1)] = next(x for x in q.groups()[1:] if x is not None)
+                        # RHS: literals and already-known $vars joined by '.' (concat) or by '+'/'-' (integers).
+                        term = r"""'[^'\\]*'|"[^"\\$]*"|-?\d+|\$\w+"""
+                        toks = re.findall(r"\s*(" + term + r")\s*([.+-]|$)", q.group(2))
+                        if not toks or toks[-1][1] or re.sub(r"\s", "", q.group(2)) != "".join(re.sub(r"\s", "", a) + o for a, o in toks):
+                            return None
+                        vals = []
+                        for a, _ in toks:
+                            if a[0] == "$":
+                                if not isinstance(data.get(a[1:]), str):
+                                    return None
+                                vals.append(data[a[1:]])
+                            else:
+                                vals.append(a[1:-1] if a[0] in "'\"" else a)
+                        ops = {o for _, o in toks[:-1]}
+                        if not ops:
+                            r = vals[0]
+                        elif ops == {"."}:
+                            r = "".join(vals)
+                        elif ops <= {"+", "-"} and all(re.fullmatch(r"-?\d+", x) for x in vals):
+                            r = int(vals[0])
+                            for (_, o), x in zip(toks[:-1], vals[1:]):
+                                r = r + int(x) if o == "+" else r - int(x)
+                            r = str(r)
+                        else:
+                            return None
+                        # integers print as decimal text; '' and '0' are falsy, like PHP
+                        data[q.group(1)] = r
                     return ""
                 if html is not None:
                     for pat in (r"@php\s*\((.*?)\)", r"@php\b(.*?)@endphp\b"):

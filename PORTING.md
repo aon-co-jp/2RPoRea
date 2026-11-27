@@ -242,3 +242,7 @@
 ## 2026-11-27 23:15 `$request->boolean()` / boolean()
 **日本語**: 条件の中の `$request->boolean('k')` を変換(Laravelと同じく 1・"1"・true・"true"・"on"・"yes" が真)。curl実測: `on=yes`/`on=1`/JSON `true`→T、`on=0`/無し→F。テスト43件。
 **English**: `$request->boolean('k')` inside conditions translates (true for 1, "1", true, "true", "on", "yes", as Laravel). Measured: `on=yes`, `on=1`, JSON `true` give T; `on=0` and absent give F. 43 tests.
+
+## 2026-11-27 23:17 配列形の has/filled/hasAny/anyFilled / Array forms
+**日本語**: `$request->has(['a','b'])`・`filled([...])`(すべて)と `hasAny([...])`・`anyFilled([...])`(どれか)を、かっこ付きの `&&`/`||` に展開して変換。curl実測4件一致(`b=1&c=1&d=`→ng、`b=1&c=1&d=2`→ok など)。テスト44件。
+**English**: `has([...])` / `filled([...])` (all) and `hasAny([...])` / `anyFilled([...])` (any) expand into parenthesized `&&`/`||`. Four curl checks match (e.g. `b=1&c=1&d=` ng, `b=1&c=1&d=2` ok). 44 tests.

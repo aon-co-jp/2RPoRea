@@ -374,11 +374,27 @@ def _if_paren(b: str):
     return (b[m.end():i - 1], m2.group(1), b[i + m2.end():]) if m2 else None
 
 
+_MULTI = re.compile(r"\$request->(hasAny|anyFilled|has|filled)\(\s*\[([^\]]*)\]\s*\)")
+
+
+def _expand_multi(b: str) -> str:
+    """Rewrite array forms into single-key atoms: has([..]) / filled([..]) = all (&&),
+    hasAny([..]) / anyFilled([..]) = any (||)."""
+    def rep(m):
+        keys = re.findall(r"'(\w+)'", m.group(2))
+        if not keys or re.sub(r"'\w+'|[\s,]", "", m.group(2)):
+            return m.group(0)
+        kind = "has" if m.group(1) in ("has", "hasAny") else "filled"
+        op = " || " if m.group(1) in ("hasAny", "anyFilled") else " && "
+        return "(" + op.join("$request->%s('%s')" % (kind, k) for k in keys) + ")"
+    return _MULTI.sub(rep, b)
+
+
 def translate(body: str, params: list):
     """('json', value) / ('text', parts) for a body made only of simple local assignments
     (`$x = EXPR;`) followed by one `return EXPR;`; or ('if', param, negate, literal, then, else) for
     `if ($param == 'lit') { ... } [else { ... }]` on a route parameter followed by the rest. Else None."""
-    b = _strip_comments(body).strip()
+    b = _expand_multi(_strip_comments(body).strip())
     m = _IF.match(b)
     if m and m.group(1) in params:
         lit = _P(m.group(3), params, {}).value()

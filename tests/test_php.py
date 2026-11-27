@@ -265,3 +265,11 @@ def test_boolean(tmp_path):
         "<?php\nRoute::post('/b', function (Request $request) {\n    if ($request->boolean('on')) { return 'T'; }\n    return 'F';\n});\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/b"]
     assert tr[0] == "ifhas" and tr[1] == "boolean"
+
+
+def test_has_any(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::post('/a', function (Request $request) {\n    if ($request->hasAny(['a', 'b']) && $request->filled(['c', 'd'])) { return 'ok'; }\n    return 'ng';\n});\n", encoding="utf-8")
+    tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/a"]
+    assert tr[0] == "ifcond" and [k for _, _, k, _ in tr[1]] == ["(", "has", "has", ")", "(", "filled", "filled", ")"]

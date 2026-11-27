@@ -534,3 +534,12 @@ def test_view_compare_ternary(tmp_path):
     (tmp_path / "resources/views/c.blade.php").write_text("@php($n = '10'){{ $n == '1e1' ? 'T' : 'F' }}{{ $n === 10 ? 'T' : 'F' }}{{ $n < '9' ? 'T' : 'F' }}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/c"] == ("text", [("lit", "TFF")])
+
+
+def test_view_list_index(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/i', 'i', ['xs' => ['a', '<b>']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/i.blade.php").write_text("{{ $xs[1] }}|{!! $xs[0] !!}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/i"] == ("text", [("lit", "&lt;b&gt;|a")])

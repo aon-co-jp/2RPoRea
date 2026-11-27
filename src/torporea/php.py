@@ -785,6 +785,15 @@ def routes(root: str) -> list:
                         return _h2.escape(v) if isinstance(v, str) else q.group(0)
                     return _h2.escape(q.group(2) if truthy else q.group(4))
                 html = re.sub(r"""\{\{\s*\$(\w+)\s*\?\s*(?:'([^'\\]*)'\s*)?:\s*('([^'\\]*)')\s*\}\}""", _tern, html)
+                # {{ $list[N] }} (escaped) and {!! $list[N] !!} for literal lists; a missing index stays a TODO.
+                def _idx(q, esc):
+                    v = _d.get(q.group(1))
+                    i = int(q.group(2))
+                    if not isinstance(v, list) or not (0 <= i < len(v)) or not isinstance(v[i], str):
+                        return q.group(0)
+                    return _h2.escape(v[i]) if esc else v[i]
+                html = re.sub(r"\{\{\s*\$(\w+)\[\s*(\d+)\s*\]\s*\}\}", lambda q: _idx(q, True), html)
+                html = re.sub(r"\{!!\s*\$(\w+)\[\s*(\d+)\s*\]\s*!!\}", lambda q: _idx(q, False), html)
                 # {{ $k OP 'lit' ? 'a' : 'b' }} with == != === !== < > <= >= (PHP 8 string comparison: numeric strings compare as numbers).
                 def _cmpt(q):
                     v, op, lit = _d.get(q.group(1)), q.group(2), (q.group(3) if q.group(3) is not None else q.group(4))

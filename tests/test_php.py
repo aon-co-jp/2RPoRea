@@ -395,3 +395,12 @@ def test_view_php_assign(tmp_path):
     (v / "p.blade.php").write_text("@php($a = 'A')\n@php $b = \"B\"; $c = '<'; @endphp{{ $a }}{{ $b }}{{ $c }}", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p"] == ("text", [("lit", "\nAB&lt;")])
+
+
+def test_view_php_int(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "p.blade.php").write_text("@php($n = 42)@php($z = 0){{ $n }}@if($z)Z@else-@endif", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p"] == ("text", [("lit", "42-")])

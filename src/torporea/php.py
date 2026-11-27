@@ -611,13 +611,14 @@ def routes(root: str) -> list:
                 # @php($x = 'v') and @php $x = 'v'; ... @endphp with only literal string assignments set view data.
                 def _php(code):
                     for st in [x.strip() for x in code.split(";") if x.strip()]:
-                        q = re.fullmatch(r"""\$(\w+)\s*=\s*(?:'([^'\\]*)'|"([^"\\$]*)")""", st)
+                        q = re.fullmatch(r"""\$(\w+)\s*=\s*(?:'([^'\\]*)'|"([^"\\$]*)"|(-?\d+))""", st)
                         if not q:
                             return None
-                        data[q.group(1)] = q.group(2) if q.group(2) is not None else q.group(3)
+                        # an integer literal prints as its decimal text; 0 is falsy, like PHP
+                        data[q.group(1)] = next(x for x in q.groups()[1:] if x is not None)
                     return ""
                 if html is not None:
-                    for pat in (r"@php\s*\((.*?)\)(?=\s|$|<)", r"@php\b(.*?)@endphp\b"):
+                    for pat in (r"@php\s*\((.*?)\)", r"@php\b(.*?)@endphp\b"):
                         html = re.sub(pat, lambda q: q.group(0) if _php(q.group(1)) is None else "", html, flags=re.S)
                 if html is not None:
                     # @if($k) / @isset($k) ... [@else ...] @endif / @endisset with literal data: decided at convert time

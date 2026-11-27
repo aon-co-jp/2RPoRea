@@ -707,3 +707,12 @@ def test_view_arith_without_data(tmp_path):
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "7|2")])
     assert r["/u"] is None
+
+
+def test_view_array_helpers(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['xs' => ['a', 'b', 'c'], 'n' => '2']);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("{{ max(1, $n, 5) }}|{{ min($n, 1) }}|{{ max([3, 9.5]) }}|{{ array_sum([1,2,3]) }}|{{ array_sum([1.5, 2]) }}|{{ end($xs) }}{{ reset($xs) }}|{{ in_array('b', $xs) ? 'y' : 'n' }}{{ in_array('z', $xs) ? 'y' : 'n' }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "5|1|9.5|6|3.5|ca|yn")])

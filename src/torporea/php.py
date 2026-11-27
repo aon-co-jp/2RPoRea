@@ -1102,6 +1102,52 @@ def routes(root: str) -> list:
                     except ValueError:
                         return q.group(0)
                 html = re.sub(r"\{\{\s*(\w+)\s*\(\s*('[^'\\]*'|\$\w+\s*\[[^\]]*\])\s*\)\s*\}\}", _fn1, html)
+                # array helpers over literal data: max/min (numbers), end/reset (last/first), array_sum, in_array(...) ? 'a' : 'b'.
+                def _arg(t):
+                    t = t.strip()
+                    m1 = re.fullmatch(r"'([^'\\]*)'", t)
+                    if m1:
+                        return m1.group(1)
+                    if re.fullmatch(r"-?\d+(?:\.\d+)?", t):
+                        return t
+                    m1 = re.fullmatch(r"\$(\w+)", t)
+                    if m1 and m1.group(1) in data:
+                        return data[m1.group(1)]
+                    m1 = re.fullmatch(r"\[(.*)\]", t, re.S)
+                    if m1:
+                        items = [_arg(x) for x in m1.group(1).split(",")] if m1.group(1).strip() else []
+                        return items if all(isinstance(x, str) for x in items) else None
+                    return None
+                def _nums(xs):
+                    if not xs or not all(isinstance(x, str) and re.fullmatch(r"-?\d+(?:\.\d+)?", x) for x in xs):
+                        return None
+                    return [float(x) if "." in x else int(x) for x in xs]
+                def _fmt(v):
+                    return str(v) if isinstance(v, int) else format(v, ".14g")
+                def _arrfn(q):
+                    f, raw = q.group(1), q.group(2)
+                    args = [_arg(x) for x in re.split(r",(?![^\[]*\])", raw)] if raw.strip() else []
+                    if any(a is None for a in args):
+                        return q.group(0)
+                    if f in ("max", "min"):
+                        xs = args[0] if len(args) == 1 and isinstance(args[0], list) else args
+                        ns = _nums(xs)
+                        if ns is None:
+                            return q.group(0)
+                        return _fmt(max(ns) if f == "max" else min(ns))
+                    if f in ("end", "reset") and len(args) == 1 and isinstance(args[0], list) and args[0] and isinstance(args[0][-1 if f == "end" else 0], str):
+                        return _h2.escape(args[0][-1 if f == "end" else 0])
+                    if f == "array_sum" and len(args) == 1 and isinstance(args[0], list):
+                        ns = _nums(args[0]) if args[0] else [0]
+                        return q.group(0) if ns is None else _fmt(sum(ns))
+                    return q.group(0)
+                html = re.sub(r"\{\{\s*(max|min|end|reset|array_sum)\s*\(((?:[^(){}\[\]]|\[[^\[\]]*\])*)\)\s*\}\}", _arrfn, html)
+                def _inarr(q):
+                    xs = data.get(q.group(2))
+                    if not isinstance(xs, list):
+                        return q.group(0)
+                    return _h2.escape(q.group(3) if q.group(1) in xs else q.group(4))
+                html = re.sub(r"\{\{\s*in_array\(\s*'([^'\\]*)'\s*,\s*\$(\w+)\s*\)\s*\?\s*'([^'\\]*)'\s*:\s*'([^'\\]*)'\s*\}\}", _inarr, html)
                 # {{ expr }} with integer/float arithmetic over literals and known $vars (e.g. {{ $n * 3 }}).
                 def _arith(q):
                     if not re.search(r"[-+*/%]", q.group(1)):

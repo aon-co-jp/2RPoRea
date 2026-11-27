@@ -121,3 +121,12 @@ def test_request_only_except():
     assert translate("return $request->only($keys);", []) is None
     s = render_main([("POST", "/o", [], ("input_all", "except", ["a"]), "routes/web.php")])
     assert "let input = read_input(req).await;" in s and "!keys.contains" in s
+
+
+def test_request_has_filled():
+    t = translate("if ($request->filled('n')) { return 'a'; } return 'b';", [])
+    assert t[0] == "ifhas" and t[1:4] == ("filled", "n", False)
+    t = translate("if (!$request->has('n')) { return 'a'; } else { return 'b'; }", [])
+    assert t[0] == "ifhas" and t[1:4] == ("has", "n", True)
+    s = render_main([("POST", "/h", [], t, "routes/web.php")])
+    assert "if !input.contains_key(\"n\")" in s and "let input = read_input(req).await;" in s

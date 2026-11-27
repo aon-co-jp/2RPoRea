@@ -174,3 +174,7 @@
 ## 2026-11-27 22:50 JSON の型を保持 / JSON types kept
 **日本語**: `read_input` を `HashMap<String, serde_json::Value>` に変更し、JSON本文の数値・真偽値・入れ子をそのまま返す(前回の既知の差=数値が文字列になる、を解消)。curl実測: `{"x":"y","n":2,"ok":true,"o":{"k":[1]}}` → `{"n":2,"ok":true,"o":{"k":[1]},"x":"y"}`。form・query は従来どおり文字列。テスト27件成功。
 **English**: `read_input` now returns `HashMap<String, serde_json::Value>`, so JSON bodies keep numbers, booleans and nesting (fixes the earlier known difference where numbers became strings). Measured with curl: `{"x":"y","n":2,"ok":true,"o":{"k":[1]}}` comes back as `{"n":2,"ok":true,"o":{"k":[1]},"x":"y"}`. Form and query values stay strings. 27 tests pass.
+
+## 2026-11-27 23:00 `$request->has()` / `filled()`
+**日本語**: `if ([!]$request->has('k')) {...} [else {...}]` と `filled('k')`(キーがあり、空文字・null でない)を条件分岐へ変換。curl実測: `name=Bob`→filled、`name=`→empty、`x=1`→missing。テスト28件成功。条件の組み合わせ(&&・||)は未対応(501)。
+**English**: `if ([!]$request->has('k')) {...} [else {...}]` and `filled('k')` (present and not an empty string or null) now become branches. Measured with curl: `name=Bob` gives filled, `name=` gives empty, `x=1` gives missing. 28 tests pass. Combined conditions (&&, ||) are not supported (501).

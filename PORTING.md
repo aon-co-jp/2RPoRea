@@ -254,3 +254,7 @@
 ## 2026-11-27 23:21 elseif / else if
 **日本語**: `if (...) {...} elseif (...) {...} else if (...) {...} else {...}` の連鎖を、入れ子の if として変換。curl実測: `n=1`→one、`n=2`→two、`n=9`→many、`x=1`→none。テスト46件。
 **English**: Chains of `if / elseif / else if / else` translate as nested ifs. Measured: `n=1` one, `n=2` two, `n=9` many, `x=1` none. 46 tests.
+
+## 2026-11-27 23:23 ルートパラメーターの比較を複合条件で / Route params in compound conditions
+**日本語**: `if ($kind === 'a' && $request->has('x') || $kind !== 'b')` のように、ルートパラメーターと文字列の比較を `&&`/`||`/かっこの条件に混ぜられるようにした(パラメーターでない変数は対象外)。curl実測: `/pe/a?x=1`→ok、`/pe/a`→ok、`/pe/b`→ng、`/pe/c`→ok。テスト47件。
+**English**: Comparisons of a route parameter with a string can now mix into `&&`/`||`/parenthesized conditions (non-parameter variables stay unsupported). Measured: `/pe/a?x=1` ok, `/pe/a` ok, `/pe/b` ng, `/pe/c` ok. 47 tests.

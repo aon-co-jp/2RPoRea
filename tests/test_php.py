@@ -289,3 +289,11 @@ def test_elseif(tmp_path):
         "<?php\nRoute::post('/e', function (Request $request) {\n    if ($request->has('a')) { return 'a'; } elseif ($request->has('b')) { return 'b'; } else { return 'c'; }\n});\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/e"]
     assert tr[0] == "ifhas" and tr[5][0] == "ifhas"
+
+
+def test_param_eq_condition(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::post('/p/{k}', function (Request $request, $k) {\n    if ($k === 'a' && $request->has('x')) { return 'ok'; }\n    return 'ng';\n});\n", encoding="utf-8")
+    tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p/:k"] if "/p/:k" in {p for _, p, _, _, _ in routes(str(tmp_path))} else next(tr for _, p, _, tr, _ in routes(str(tmp_path)) if p.startswith("/p/"))
+    assert tr[0] == "ifcond" and [k for _, _, k, _ in tr[1]] == ["peq", "has"]

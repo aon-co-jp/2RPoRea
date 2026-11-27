@@ -327,10 +327,10 @@ _ATOM = re.compile(r"(&&|\|\|)?\s*(!?)\s*\$request->(has|filled|missing|boolean)
 _ELSE = re.compile(r"\s*else\s*\{([^{}]*)\}\s*$", re.S)
 
 
-_TOK = re.compile(r"\s*(&&|\|\||!|\(|\)|\$request->(has|filled|missing|boolean)\(\s*'(\w+)'\s*\)|\$request->input\(\s*'(\w+)'\s*\)\s*(===?|!==?)\s*'([^'\\]*)')")
+_TOK = re.compile(r"\s*(&&|\|\||!|\(|\)|\$request->(has|filled|missing|boolean)\(\s*'(\w+)'\s*\)|\$(?!request\b)(\w+)\s*(===?|!==?)\s*'([^'\\]*)'|\$request->input\(\s*'(\w+)'\s*\)\s*(===?|!==?)\s*'([^'\\]*)')")
 
 
-def _cond_tokens(s: str):
+def _cond_tokens(s: str, params=()):
     """Tokenize `$request->has/filled` atoms joined by &&, ||, ! and parentheses into ifcond atoms
     (join, negate, kind, key); kind '(' / ')' are grouping marks. None when anything else appears."""
     out, i, j, neg, depth, want_atom = [], 0, "", False, 0, True
@@ -349,8 +349,13 @@ def _cond_tokens(s: str):
             elif m.group(2):
                 out.append((j, neg, m.group(2), m.group(3))); j, neg, want_atom = "", False, False
             elif m.group(4):
+                if m.group(4) not in params:
+                    return None
                 n2 = neg != m.group(5).startswith("!")
-                out.append((j, n2, "eq", m.group(4) + "\0" + m.group(6))); j, neg, want_atom = "", False, False
+                out.append((j, n2, "peq", m.group(4) + "\0" + m.group(6))); j, neg, want_atom = "", False, False
+            elif m.group(7):
+                n2 = neg != m.group(8).startswith("!")
+                out.append((j, n2, "eq", m.group(7) + "\0" + m.group(9))); j, neg, want_atom = "", False, False
             else:
                 return None
         else:
@@ -426,7 +431,7 @@ def translate(body: str, params: list):
         atoms = [(j or "", n == "!", k, key) for j, n, k, key in _ATOM.findall(m.group(1))]
         return ("ifcond", atoms, then, other)
     pm = _if_paren(b)
-    toks = _cond_tokens(pm[0]) if pm and ("(" in re.sub(r"->(?:has|filled|missing|boolean|input)\(", "", pm[0]) or "->input(" in pm[0]) else None
+    toks = _cond_tokens(pm[0], params) if pm and ("(" in re.sub(r"->(?:has|filled|missing|boolean|input)\(", "", pm[0]) or "->input(" in pm[0] or re.search(r"\$(?!request\b)\w+\s*[=!]=", pm[0])) else None
     if toks:
         then = translate(pm[1], params)
         rest = _elseif(pm[2])
@@ -491,6 +496,9 @@ def translate(body: str, params: list):
 def _has_rs(kind: str, key: str) -> str:
     if kind == "has":
         return "input.contains_key(%s)" % _rs_str(key)
+    if kind == "peq":
+        k, v = key.split("\0", 1)
+        return "(params.get(%s).unwrap_or(\"\") == %s)" % (_rs_str(k), _rs_str(v))
     if kind == "eq":
         # Form and JSON strings compare as text; other JSON values never equal a string literal.
         k, v = key.split("\0", 1)

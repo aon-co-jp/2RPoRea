@@ -386,3 +386,12 @@ def test_view_default(tmp_path):
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/d"] == ("text", [("lit", "A|y")])
     assert r["/n"] == ("text", [("lit", "x&lt;|y")])
+
+
+def test_view_php_assign(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "p.blade.php").write_text("@php($a = 'A')\n@php $b = \"B\"; $c = '<'; @endphp{{ $a }}{{ $b }}{{ $c }}", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p"] == ("text", [("lit", "\nAB&lt;")])

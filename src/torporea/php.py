@@ -593,12 +593,12 @@ def routes(root: str) -> list:
                         return mm.group(0)
                     return "".join(re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", str(i), mm.group(7)) for i in rng)
                 html = re.sub(r"@for\s*\(\s*\$(\w+)\s*=\s*(-?\d+)\s*;\s*\$(\w+)\s*(<=?)\s*(-?\d+)\s*;\s*\$(\w+)\+\+\s*\)(.*?)@endfor\b", _for, html, flags=re.S)
-            if html is not None and m.group(5):
+            data = {}
+            if html is not None and (m.group(5) or "@php" in html):
                 # Route::view data: literal 'key' => 'value' pairs fill {{ $key }} (HTML-escaped, as Blade does).
                 import html as _h
-                data = {}
                 # 'key' => 'value' or 'key' => ['a', 'b'] (a list of literal strings, for @foreach).
-                rest = m.group(5).strip().rstrip(",").strip()
+                rest = (m.group(5) or "").strip().rstrip(",").strip()
                 item = re.compile(r"\s*'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\[\s*((?:'[^'\\]*'\s*,?\s*)*)\])\s*(?:,|$)")
                 pos = 0
                 while pos < len(rest):
@@ -608,6 +608,17 @@ def routes(root: str) -> list:
                         break
                     data[mm.group(1)] = mm.group(2) if mm.group(2) is not None else re.findall(r"'([^'\\]*)'", mm.group(3))
                     pos = mm.end()
+                # @php($x = 'v') and @php $x = 'v'; ... @endphp with only literal string assignments set view data.
+                def _php(code):
+                    for st in [x.strip() for x in code.split(";") if x.strip()]:
+                        q = re.fullmatch(r"""\$(\w+)\s*=\s*(?:'([^'\\]*)'|"([^"\\$]*)")""", st)
+                        if not q:
+                            return None
+                        data[q.group(1)] = q.group(2) if q.group(2) is not None else q.group(3)
+                    return ""
+                if html is not None:
+                    for pat in (r"@php\s*\((.*?)\)(?=\s|$|<)", r"@php\b(.*?)@endphp\b"):
+                        html = re.sub(pat, lambda q: q.group(0) if _php(q.group(1)) is None else "", html, flags=re.S)
                 if html is not None:
                     # @if($k) / @isset($k) ... [@else ...] @endif / @endisset with literal data: decided at convert time
                     # (PHP truthiness of a string: '' and '0' are false). Unknown keys keep the block (stays 501).
@@ -663,7 +674,7 @@ def routes(root: str) -> list:
             if html is not None:
                 # {{ $k ?? 'default' }}: the literal value when given (escaped), else the default (escaped), as Blade does.
                 import html as _h2
-                _d = data if m.group(5) else {}
+                _d = data
                 html = re.sub(r"""\{\{\s*\$(\w+)\s*\?\?\s*(?:'([^'\\]*)'|"([^"\\$]*)")\s*\}\}""",
                               lambda q: _h2.escape(_d[q.group(1)] if isinstance(_d.get(q.group(1)), str)
                                                    else (q.group(2) if q.group(2) is not None else q.group(3))), html)

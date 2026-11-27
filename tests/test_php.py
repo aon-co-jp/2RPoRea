@@ -863,3 +863,10 @@ def test_request_validate_simple_rules(tmp_path):
     # unknown rules stay a 501 TODO
     assert php.translate("$request->validate(['e' => 'email|confirmed']); return 'ok';", [])[0] == 'valid'
     assert php.translate("$request->validate(['e' => 'unique:users']); return 'ok';", []) is None
+
+
+def test_back_with_flash_and_session():
+    from torporea import php
+    tr = php.translate("return back()->with('status', 'Saved');", [])
+    assert tr == ("backw", "status", "Saved")
+    assert "rporea_flash" in php._leaf_rs(tr)

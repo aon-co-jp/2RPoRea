@@ -482,6 +482,9 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
+        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*'([^'\\]*)'\s*\)", stmts[-1], re.S)
+        if bw:
+            return ("backw", bw.group(1), bw.group(2))
         bx = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))((?:\s*->\s*with(?:Input|Errors)\((?:[^()]|\([^()]*\))*\))+)", stmts[-1], re.S)
         if bx and "withErrors" in bx.group(1):
             # withErrors(['k' => 'msg', ...]) with literal messages: flashed in the rporea_err cookie for @error / $errors->first().
@@ -571,6 +574,8 @@ def _leaf_rs(tr) -> str:
         return "{ let mut r = { %s }; %s r }" % (_leaf_rs(tr[2]), sets)
     if tr[0] == "status":
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
+    if tr[0] == "backw":
+        return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_flash\", %s).parse().unwrap()); r }" % _rs_str(json.dumps({tr[1]: tr[2]}, ensure_ascii=False))
     if tr[0] == "valid":
         arr = ", ".join("(%s, &[%s][..])" % (_rs_str(k), ", ".join(_rs_str(r) for r in rs)) for k, rs in tr[1])
         back = "let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); let kept: std::collections::HashMap<String, serde_json::Value> = input.iter().filter(|(k, _)| !matches!(k.as_str(), \"password\" | \"password_confirmation\" | \"current_password\")).map(|(k, v)| (k.clone(), v.clone())).collect(); r.headers_mut().append(\"set-cookie\", flash_old_cookie(&kept).parse().unwrap()); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_err\", &serde_json::to_string(&errs).unwrap_or_default()).parse().unwrap()); r"
@@ -638,6 +643,8 @@ def _leaf_rs(tr) -> str:
         if k == "err_blk":
             inner = " ".join("s.push_str(%s);" % _rs_str(x) if kk == "lit" else "s.push_str(&message%s);" % esc for kk, x in v[1])
             return "if let Some(message) = errs_get(&errs, %s) { %s }" % (_rs_str(v[0]), inner)
+        if k == "sess_esc":
+            return "s.push_str(&sess.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_default()%s);" % (_rs_str(v), esc)
         if k == "err_all":
             inner = " ".join("s.push_str(%s);" % _rs_str(x) if kk == "lit" else "s.push_str(&message%s);" % esc for kk, x in v)
             return "for message in errs_all(&errs) { %s }" % inner
@@ -657,10 +664,14 @@ def _leaf_rs(tr) -> str:
     kinds = set(_kinds(tr[1]))
     uses_old = "old_esc" in kinds
     uses_err = bool(kinds & {"err_first", "err_blk", "err_all", "err_if"})
-    if uses_old or uses_err:
+    uses_sess = "sess_esc" in kinds
+    if uses_sess:
+        # session('k'): the value flashed by ->with('k', 'v') on the previous request (one request only).
+        pieces.insert(0, "let sess = flashed(&req, \"rporea_flash\");")
+    if uses_old or uses_err or uses_sess:
         # old() / @error: read the flashed data once, then expire the cookie (Laravel flash data lives for one request).
         pre = ("let old = old_input(&req); " if uses_old else "") + ("let errs = flashed_errs(&req); " if uses_err else "")
-        clear = " ".join("r.headers_mut().append(\"set-cookie\", \"%s=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax\".parse().unwrap());" % c for c, u in (("rporea_old", uses_old), ("rporea_err", uses_err)) if u)
+        clear = " ".join("r.headers_mut().append(\"set-cookie\", \"%s=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax\".parse().unwrap());" % c for c, u in (("rporea_old", uses_old), ("rporea_err", uses_err), ("rporea_flash", uses_sess)) if u)
         return "{ %slet mut s = String::new(); %s let mut r = hyper_compat::html_response(StatusCode::OK, s); %s r }" % (pre, " ".join(pieces), clear)
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
 
@@ -1438,6 +1449,10 @@ def routes(root: str) -> list:
                     rq.append(("old_esc", (q.group(2), q.group(4) or "")))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*old\(\s*(['\"])(\w+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _old, html)
+                def _sess(q):
+                    rq.append(("sess_esc", q.group(2)))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"\{\{\s*session\(\s*(['\"])([\w.-]+)\1\s*\)\s*\}\}", _sess, html)
                 def _errf(q):
                     rq.append(("err_first", q.group(2)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
@@ -1510,7 +1525,7 @@ def routes(root: str) -> list:
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
                         e = rq[int(seg)]
-                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if") else ("query_esc", e))
+                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc") else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])

@@ -826,7 +826,7 @@ def routes(root: str) -> list:
                                         end = (hm.end() + tm.start(), hm.end() + tm.end())
                                         break
                                 inner = html[hm.end():end[0]] if end else ""
-                                if not end or re.search(r"@(continue|break)\b", inner):
+                                if not end or re.search(r"@(continue|break)\b", "".join(re.findall(r"@foreach\b.*@endforeach\b", inner, flags=re.S))):
                                     continue
                                 class _M:
                                     string = html

@@ -467,6 +467,26 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
+        bx = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))((?:\s*->\s*with(?:Input|Errors)\((?:[^()]|\([^()]*\))*\))+)", stmts[-1], re.S)
+        if bx and "withErrors" in bx.group(1):
+            # withErrors(['k' => 'msg', ...]) with literal messages: flashed in the rporea_err cookie for @error / $errors->first().
+            inp, errs = None, None
+            for cm in re.finditer(r"->\s*with(Input|Errors)\(((?:[^()]|\([^()]*\))*)\)", bx.group(1)):
+                a = cm.group(2).strip()
+                if cm.group(1) == "Errors":
+                    e = _php_array(a) if a.startswith("[") else None
+                    if not isinstance(e, dict) or not e or not all(isinstance(v, str) or (isinstance(v, list) and v and all(isinstance(x, str) for x in v)) for v in e.values()):
+                        return None
+                    errs = {k: (v if isinstance(v, list) else [v]) for k, v in e.items()}
+                elif not a:
+                    inp = ("all",)
+                else:
+                    om = re.fullmatch(r"\$request\s*->\s*(only|except)\(\s*\[([^\]]*)\]\s*\)", a)
+                    keys = [x.strip() for x in om.group(2).split(",") if x.strip()] if om else None
+                    if not om or not all(re.fullmatch(r"'[\w.-]+'|\"[\w.-]+\"", k) for k in keys):
+                        return None
+                    inp = (om.group(1), [k[1:-1] for k in keys])
+            return ("backx", inp, errs)
         bk = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))(\s*->\s*withInput\(\s*(?:\$request\s*->\s*(only|except)\(\s*\[([^\]]*)\]\s*\)\s*)?\))?", stmts[-1])
         if bk:
             # withInput(): the request input is flashed to the next request in the rporea_old cookie (read by old()).
@@ -536,6 +556,16 @@ def _leaf_rs(tr) -> str:
         return "{ let mut r = { %s }; %s r }" % (_leaf_rs(tr[2]), sets)
     if tr[0] == "status":
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
+    if tr[0] == "backx":
+        inp, errs = tr[1], tr[2]
+        code = "let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap()));"
+        if inp:
+            if inp[0] == "all":
+                code += " r.headers_mut().append(\"set-cookie\", flash_old_cookie(&input).parse().unwrap());"
+            else:
+                code += " { let keys: &[&str] = &[%s]; let picked: std::collections::HashMap<String, serde_json::Value> = input.iter().filter(|(k, _)| %skeys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect(); r.headers_mut().append(\"set-cookie\", flash_old_cookie(&picked).parse().unwrap()); }" % (", ".join(_rs_str(k) for k in inp[1]), "" if inp[0] == "only" else "!")
+        code += " r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_err\", %s).parse().unwrap());" % _rs_str(json.dumps(errs, ensure_ascii=False))
+        return "{ %s r }" % code
     if tr[0] == "back" and len(tr) > 2:
         keep = "" if tr[2] == "only" else "!"
         return "{ let keys: &[&str] = &[%s]; let picked: std::collections::HashMap<String, serde_json::Value> = input.iter().filter(|(k, _)| %skeys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect(); let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r.headers_mut().insert(\"set-cookie\", flash_old_cookie(&picked).parse().unwrap()); r }" % (", ".join(_rs_str(k) for k in tr[3]), keep)
@@ -582,14 +612,24 @@ def _leaf_rs(tr) -> str:
         if k == "query_esc":
             return "s.push_str(&input.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string()).replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\"));" % (_rs_str(v[0]), _rs_str(v[1]))
         return "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v)
+    esc = ".replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\")"
     def piece_old(k, v):
+        if k == "err_first":
+            return "s.push_str(&err_first(&errs, %s)%s);" % (_rs_str(v), esc)
+        if k == "err_blk":
+            inner = " ".join("s.push_str(%s);" % _rs_str(x) if kk == "lit" else "s.push_str(&message%s);" % esc for kk, x in v[1])
+            return "if let Some(message) = errs_get(&errs, %s) { %s }" % (_rs_str(v[0]), inner)
         if k == "old_esc":
             return "s.push_str(&old.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string()).replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\"));" % (_rs_str(v[0]), _rs_str(v[1]))
         return piece(k, v)
     pieces = [piece_old(k, v) for k, v in tr[1]]
-    if any(k == "old_esc" for k, _ in tr[1]):
-        # old(): read the flashed input once, then expire the cookie (Laravel flash data lives for one request).
-        return "{ let old = old_input(&req); let mut s = String::new(); %s let mut r = hyper_compat::html_response(StatusCode::OK, s); r.headers_mut().insert(\"set-cookie\", \"rporea_old=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax\".parse().unwrap()); r }" % " ".join(pieces)
+    uses_old = any(k == "old_esc" for k, _ in tr[1])
+    uses_err = any(k in ("err_first", "err_blk") for k, _ in tr[1])
+    if uses_old or uses_err:
+        # old() / @error: read the flashed data once, then expire the cookie (Laravel flash data lives for one request).
+        pre = ("let old = old_input(&req); " if uses_old else "") + ("let errs = flashed(&req, \"rporea_err\"); " if uses_err else "")
+        clear = " ".join("r.headers_mut().append(\"set-cookie\", \"%s=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax\".parse().unwrap());" % c for c, u in (("rporea_old", uses_old), ("rporea_err", uses_err)) if u)
+        return "{ %slet mut s = String::new(); %s let mut r = hyper_compat::html_response(StatusCode::OK, s); %s r }" % (pre, " ".join(pieces), clear)
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
 
 
@@ -1366,6 +1406,24 @@ def routes(root: str) -> list:
                     rq.append(("old_esc", (q.group(2), q.group(4) or "")))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*old\(\s*(['\"])(\w+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _old, html)
+                def _errf(q):
+                    rq.append(("err_first", q.group(2)))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"\{\{\s*\$errors\s*->\s*first\(\s*(['\"])([\w.-]+)\1\s*\)\s*\}\}", _errf, html)
+                def _errb(q):
+                    body = q.group(3)
+                    segs = re.split(r"\{\{\s*\$message\s*\}\}", body)
+                    if any("{{" in x or "{!!" in x or re.search(r"(?<![\w@])@\w", x) or chr(1) in x for x in segs):
+                        return q.group(0)
+                    parts = []
+                    for i, x in enumerate(segs):
+                        if i:
+                            parts.append(("msg", ""))
+                        if x:
+                            parts.append(("lit", x))
+                    rq.append(("err_blk", (q.group(2), parts)))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"@error\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@enderror\b", _errb, html, flags=re.S)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None
@@ -1379,7 +1437,7 @@ def routes(root: str) -> list:
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
                         e = rq[int(seg)]
-                        tparts.append(e if e[0] == "old_esc" else ("query_esc", e))
+                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk") else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])
@@ -1509,6 +1567,39 @@ fn flash_old_cookie(input: &std::collections::HashMap<String, serde_json::Value>
     format!("rporea_old={v}; Path=/; Max-Age=300; HttpOnly; SameSite=Lax")
 }
 
+/// A flashed value (already JSON) as a short-lived percent-encoded cookie (not sent above 3 KiB).
+fn flash_cookie(name: &str, json: &str) -> String {
+    let mut v = String::new();
+    for b in json.bytes() {
+        if b.is_ascii_alphanumeric() || b"-._~".contains(&b) { v.push(b as char) } else { v.push_str(&format!("%{:02X}", b)) }
+    }
+    if v.len() > 3072 { v.clear(); }
+    format!("{name}={v}; Path=/; Max-Age=300; HttpOnly; SameSite=Lax")
+}
+
+/// A JSON object flashed in the named cookie on the previous request (empty when missing or malformed).
+fn flashed(req: &Request, name: &str) -> serde_json::Map<String, serde_json::Value> {
+    let pre = format!("{name}=");
+    let raw = req.headers().get_all("cookie").iter().filter_map(|h| h.to_str().ok()).flat_map(|h| h.split(';')).find_map(|c| c.trim().strip_prefix(pre.as_str()).map(|v| v.to_string()));
+    match raw.and_then(|v| serde_json::from_str::<serde_json::Value>(&form_decode(&v)).ok()) {
+        Some(serde_json::Value::Object(m)) => m,
+        _ => serde_json::Map::new(),
+    }
+}
+
+/// Laravel `$errors->first('k')` / `@error('k')`: the first message for the key.
+fn errs_get(errs: &serde_json::Map<String, serde_json::Value>, k: &str) -> Option<String> {
+    match errs.get(k)? {
+        serde_json::Value::String(t) => Some(t.clone()),
+        serde_json::Value::Array(a) => a.first().and_then(|v| v.as_str()).map(|t| t.to_string()),
+        _ => None,
+    }
+}
+
+fn err_first(errs: &serde_json::Map<String, serde_json::Value>, k: &str) -> String {
+    errs_get(errs, k).unwrap_or_default()
+}
+
 /// Laravel `old()`: the input flashed by `withInput()` on the previous request.
 fn old_input(req: &Request) -> serde_json::Map<String, serde_json::Value> {
     let raw = req.headers().get_all("cookie").iter().filter_map(|h| h.to_str().ok()).flat_map(|h| h.split(';')).find_map(|c| c.trim().strip_prefix("rporea_old=").map(|v| v.to_string()));
@@ -1552,6 +1643,8 @@ def _uses_input(tr) -> bool:
         return _uses_input(tr[2])
     if tr[0] == "back":
         return len(tr) > 1
+    if tr[0] == "backx":
+        return tr[1] is not None
     if tr[0] == "hdr":
         return _uses_input(tr[2])
     return tr[0] == "input_all" or (tr[0] == "text" and any(k in ("query", "query_esc") for k, _ in tr[1]))

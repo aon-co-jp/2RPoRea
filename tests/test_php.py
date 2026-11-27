@@ -823,3 +823,17 @@ def test_with_input_only_except(tmp_path):
     assert r["/b"] == ("back", "input", "except", ["pw", "pw2"])
     assert r["/c"] is None
     assert "flash_old_cookie(&picked)" in render_main(rts)
+
+
+def test_with_errors_and_error_directive(tmp_path):
+    from torporea.php import routes, render_main
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::post('/p', function (Request $request) { return back()->withErrors(['name' => 'Required', 'age' => ['A', 'B']])->withInput($request->only(['name'])); });\nRoute::post('/q', function () { return back()->withErrors($v); });\nRoute::view('/f', 'f');\n", encoding="utf-8")
+    (tmp_path / "resources/views/f.blade.php").write_text("@error('name')<p>{{ $message }}</p>@enderror{{ $errors->first('age') }}", encoding="utf-8")
+    rts = routes(str(tmp_path))
+    r = {p: tr for _, p, _, tr, _ in rts}
+    assert r["/p"] == ("backx", ("only", ["name"]), {"name": ["Required"], "age": ["A", "B"]})
+    assert r["/q"] is None
+    assert r["/f"] == ("text", [("err_blk", ("name", [("lit", "<p>"), ("msg", ""), ("lit", "</p>")])), ("err_first", "age")])
+    src = render_main(rts)
+    assert "flash_cookie(\"rporea_err\"" in src and "flashed(&req, \"rporea_err\")" in src

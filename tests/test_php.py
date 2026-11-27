@@ -137,3 +137,10 @@ def test_request_has_combined():
     assert t[0] == "ifcond" and t[1] == [("", False, "filled", "a"), ("&&", True, "has", "b"), ("||", False, "has", "c")]
     s = render_main([("POST", "/b", [], t, "routes/web.php")])
     assert '&& !input.contains_key("b") || input.contains_key("c")' in s
+
+
+def test_abort():
+    assert translate("abort(404);", []) == ("abort", 404, "")
+    assert translate("abort(403, 'Forbidden');", []) == ("abort", 403, "Forbidden")
+    s = render_main([("GET", "/a", [], ("abort", 403, "no"), "routes/web.php")])
+    assert "StatusCode::from_u16(403)" in s

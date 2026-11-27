@@ -333,6 +333,10 @@ def translate(body: str, params: list):
             if not m or m.group(1) in params or m.group(1) == "this":
                 return None
             env[m.group(1)] = _expr(m.group(2), params, env)
+        ab = re.fullmatch(r"(?:return\s+)?abort\(\s*([1-5]\d\d)\s*(?:,\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*)?\)", stmts[-1], re.S)
+        if ab:
+            msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
+            return ("abort", int(ab.group(1)), msg)
         m = re.fullmatch(r"return\s+(.+)", stmts[-1], re.S)
         if not m:
             return None
@@ -350,6 +354,8 @@ def _has_rs(kind: str, key: str) -> str:
 
 
 def _leaf_rs(tr) -> str:
+    if tr[0] == "abort":
+        return "hyper_compat::html_response(StatusCode::from_u16(%d).unwrap(), %s.to_string())" % (tr[1], _rs_str(tr[2]))
     if tr[0] == "ifcond":
         # PHP and Rust share && over || precedence, so the chain is emitted as written.
         cond = " ".join(("%s %s%s" % (j, "!" if n else "", _has_rs(k, key))).strip() for j, n, k, key in tr[1])

@@ -182,3 +182,7 @@
 ## 2026-11-27 23:10 has/filled の && ・ || 組み合わせ / Combined conditions
 **日本語**: `has`/`filled`(否定つき可)を `&&`・`||` でつないだ条件を変換(PHPとRustは&&が||より優先で同じなので、そのまま出力)。curl実測: `filled(a) && !has(b) || has(c)` で a=1→yes、a=1&b=2→no、b=2&c=3→yes、a=→no。テスト29件。括弧や他の条件との混在は未対応(501)。
 **English**: Conditions joining `has`/`filled` (optionally negated) with `&&` and `||` are now converted (PHP and Rust share && over || precedence, so they are emitted as written). Measured with curl for `filled(a) && !has(b) || has(c)`: a=1 yes, a=1&b=2 no, b=2&c=3 yes, a= no. 29 tests. Parentheses or mixing with other conditions are not supported (501).
+
+## 2026-11-27 23:20 `abort(code[, 'message'])`
+**日本語**: Laravel の `abort(404)`・`abort(422, 'msg')`(本体の最後、または if の分岐内)を、その状態コードと本文の応答へ変換。curl実測: `k=1`→`ok [200]`、`x=1`→`need k [422]`。テスト30件。Laravel既定のエラーページ(HTML)は再現せず、本文は渡した文字列のみ。
+**English**: Laravel `abort(404)` and `abort(422, 'msg')` (as the last statement or inside an if branch) now return that status code with the message body. Measured with curl: `k=1` gives `ok [200]`, `x=1` gives `need k [422]`. 30 tests. Laravel's default error page (HTML) is not reproduced; the body is just the given string.

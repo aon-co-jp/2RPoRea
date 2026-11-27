@@ -1301,7 +1301,11 @@ def routes(root: str) -> list:
                     if ok is None:
                         return q.group(0)
                     return q.group(4) if ok else (q.group(5) or "")
-                html = re.sub(r"@if\s*\(\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _cif, html, flags=re.S)
+                for _ in range(8):
+                    _prev = html
+                    html = re.sub(r"@if\s*\(\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _cif, html, flags=re.S)
+                    if html == _prev:
+                        break
                 # {{ expr }} with integer/float arithmetic over literals and known $vars (e.g. {{ $n * 3 }}).
                 def _arith(q):
                     if not re.search(r"[-+*/%]", q.group(1)):

@@ -149,3 +149,4 @@ pip install .                      # 開発中 / under development
 - 08:29 文字列の連結(`.`)と配列の要素を使った計算に対応、curlで実測。 / Concatenation and arithmetic on items, measured with curl.
 - 2026-11-28 比較の三項演算子 `{{ L op R ? 'a' : 'b' }}` に対応 / comparison ternary in views (96 tests, /tz measured).
 - 2026-11-28 `@if(L op R)` の比較式に対応 / comparison @if (97 tests, /iz measured).
+- 2026-11-28 入れ子の比較 @if に対応 / nested comparison @if (98 tests, /nz measured).

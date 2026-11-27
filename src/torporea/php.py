@@ -615,7 +615,7 @@ def routes(root: str) -> list:
                     return "".join(out)
                 html = re.sub(r"@for\s*\(\s*\$(\w+)\s*=\s*(-?\d+)\s*;\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*(-?\d+)\s*;\s*\$(\w+)\s*(\+\+|--|\+=|-=)\s*(\d*)\s*\)(.*?)@endfor\b", _for, html, flags=re.S)
             data = {}
-            if html is not None and (m.group(5) or "@php" in html):
+            if html is not None and (m.group(5) or "@php" in html or "range(" in html):
                 # Route::view data: literal 'key' => 'value' pairs fill {{ $key }} (HTML-escaped, as Blade does).
                 import html as _h
                 # 'key' => 'value' or 'key' => ['a', 'b'] (a list of literal strings, for @foreach).
@@ -866,6 +866,18 @@ def routes(root: str) -> list:
                             return mm.group(0)
                         return mm.group(4) if not v else "@foreach(" + mm.group(1) + ")" + mm.group(3) + "@endforeach"
                     html = re.sub(r"@forelse\s*\(\s*(\$(\w+)\s+as\s+[^)]*)\)(.*?)@empty\b(.*?)@endforelse\b", _forelse, html, flags=re.S)
+                    # @foreach(range(A, B[, step]) as $v) with integer literals: the range becomes hidden view data (capped at 1000).
+                    def _rng(q):
+                        a, b, st = int(q.group(1)), int(q.group(2)), int(q.group(3) or 1)
+                        if st <= 0:
+                            return q.group(0)
+                        xs = [str(x) for x in (range(a, b + 1, st) if a <= b else range(a, b - 1, -st))]
+                        if len(xs) > 1000:
+                            return q.group(0)
+                        hid = "__rg%d" % len(data)
+                        data[hid] = xs
+                        return "@foreach($" + hid + " as"
+                    html = re.sub(r"@foreach\s*\(\s*range\(\s*(-?\d+)\s*,\s*(-?\d+)\s*(?:,\s*(\d+)\s*)?\)\s+as", _rng, html)
                     # Innermost loops first, so nested @foreach over separate literal arrays unrolls too.
                     while True:
                         prev = html

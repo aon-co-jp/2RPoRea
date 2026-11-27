@@ -105,3 +105,4 @@
 - 08:15 `@for` の範囲に `count($xs)`・整数データ `$n` を使えるように、curlで実測。 / `@for` bounds from `count($xs)` and integer `$n`, measured with curl.
 - 08:16 `@while` の条件に `count($xs)`・整数データ `$n` を使えるように、curlで実測。 / `@while` bounds from `count($xs)` and integer `$n`, measured with curl.
 - 08:18 `@while` の刻み(`$i += N`・`$i -= N`)に対応、curlで実測。 / `@while` steps (`+= N`, `-= N`), measured with curl.
+- 08:19 `@foreach(range(A, B[, 刻み]))` に対応、curlで実測。 / `@foreach(range(A, B[, step]))` supported, measured with curl.

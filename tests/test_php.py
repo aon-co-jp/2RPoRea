@@ -204,3 +204,14 @@ def test_redirect_route_extra_query(tmp_path):
         "Route::get('/b/{id}', function ($id) { return to_route('u', ['id' => '1', 'x' => $id]); });\n", encoding="utf-8")
     rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert rs["/a/:id"] == ("redirectp", [("lit", "/u/"), ("param", "id"), ("lit", "?tab="), ("lit", "a%20b")]) and rs["/b/:id"][1][-1] == ("penc", "id")
+
+
+def test_route_redirect_shortcuts(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::redirect('/here', '/there');\nRoute::permanentRedirect('/old', '/new');\n"
+        "Route::redirect('/t', '/u', 307);\n", encoding="utf-8")
+    rs = {(m, p): tr for m, p, _, tr, _ in routes(str(tmp_path))}
+    assert rs[("GET", "/here")] == ("redirect", "/there")
+    assert rs[("POST", "/old")] == ("status", 301, ("redirect", "/new"))
+    assert rs[("GET", "/t")] == ("status", 307, ("redirect", "/u"))

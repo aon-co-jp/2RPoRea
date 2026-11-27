@@ -218,3 +218,7 @@
 ## 2026-11-27 23:00 ルートパラメーターをクエリ値に / Route parameters as query values
 **日本語**: 余ったキーの値がルートパラメーターでも、一度URLデコードしてからRFC 3986でエンコードしてクエリ文字列に付ける(二重エンコードを防止)。curl実測: `/me3/a%20b%26c` → `302` で `/users/1?q=a%20b%26c`。テスト37件。注意: 共有の `form_decode` を使うため、パス中の `+` は空白として扱われる。
 **English**: Extra keys whose value is a route parameter are now URL-decoded once and re-encoded (RFC 3986) into the query string, avoiding double encoding. Measured with curl: `/me3/a%20b%26c` gives `302` to `/users/1?q=a%20b%26c`. 37 tests. Note: the shared `form_decode` treats `+` in the path as a space.
+
+## 2026-11-27 23:04 `Route::redirect` / `Route::permanentRedirect`
+**日本語**: `Route::redirect('/a', '/b'[, 307])`(既定302)と `Route::permanentRedirect('/a', '/b')`(301)を、全メソッド(GET/POST/PUT/DELETE)の転送ルートへ変換。curl実測: `/here`→`302 /there`、`/old2`→`301 /new2`。テスト38件。パラメーター付きのパスは未対応(除外)。
+**English**: `Route::redirect('/a', '/b'[, 307])` (default 302) and `Route::permanentRedirect('/a', '/b')` (301) become redirect routes for every method (GET/POST/PUT/DELETE). Measured with curl: `/here` gives `302 /there`, `/old2` gives `301 /new2`. 38 tests. Paths with parameters are skipped.

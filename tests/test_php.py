@@ -130,3 +130,10 @@ def test_request_has_filled():
     assert t[0] == "ifhas" and t[1:4] == ("has", "n", True)
     s = render_main([("POST", "/h", [], t, "routes/web.php")])
     assert "if !input.contains_key(\"n\")" in s and "let input = read_input(req).await;" in s
+
+
+def test_request_has_combined():
+    t = translate("if ($request->filled('a') && !$request->has('b') || $request->has('c')) { return 'y'; } return 'n';", [])
+    assert t[0] == "ifcond" and t[1] == [("", False, "filled", "a"), ("&&", True, "has", "b"), ("||", False, "has", "c")]
+    s = render_main([("POST", "/b", [], t, "routes/web.php")])
+    assert '&& !input.contains_key("b") || input.contains_key("c")' in s

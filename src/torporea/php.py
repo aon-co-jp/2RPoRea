@@ -283,6 +283,9 @@ def _expr(src: str, params: list, env: dict):
 
 _IF = re.compile(r"\s*if\s*\(\s*\$(\w+)\s*(===?|!==?)\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\)\s*\{([^{}]*)\}\s*", re.S)
 _IFHAS = re.compile(r"\s*if\s*\(\s*(!?)\s*\$request->(has|filled)\(\s*'(\w+)'\s*\)\s*\)\s*\{([^{}]*)\}\s*", re.S)
+_ONE = r"!?\s*\$request->(?:has|filled)\(\s*'\w+'\s*\)"
+_IFMULTI = re.compile(r"\s*if\s*\(\s*(" + _ONE + r"(?:\s*(?:&&|\|\|)\s*" + _ONE + r")+)\s*\)\s*\{([^{}]*)\}\s*", re.S)
+_ATOM = re.compile(r"(&&|\|\|)?\s*(!?)\s*\$request->(has|filled)\(\s*'(\w+)'\s*\)")
 _ELSE = re.compile(r"\s*else\s*\{([^{}]*)\}\s*$", re.S)
 
 
@@ -301,6 +304,16 @@ def translate(body: str, params: list):
         if then is None or other is None or lit[0] != "text" or any(k != "lit" for k, _ in lit[1]):
             return None
         return ("if", m.group(1), m.group(2).startswith("!"), "".join(v for _, v in lit[1]), then, other)
+    m = _IFMULTI.match(b)
+    if m:
+        then = translate(m.group(2), params)
+        rest = b[m.end():]
+        em = _ELSE.fullmatch(rest) if rest.strip().startswith("else") else None
+        other = translate(em.group(1), params) if em else translate(rest, params)
+        if then is None or other is None:
+            return None
+        atoms = [(j or "", n == "!", k, key) for j, n, k, key in _ATOM.findall(m.group(1))]
+        return ("ifcond", atoms, then, other)
     m = _IFHAS.match(b)
     if m:
         then = translate(m.group(4), params)
@@ -330,7 +343,17 @@ def translate(body: str, params: list):
 
 # --- route collection and Rust emission -----------------------------------------------------
 
+def _has_rs(kind: str, key: str) -> str:
+    if kind == "has":
+        return "input.contains_key(%s)" % _rs_str(key)
+    return "input.get(%s).is_some_and(|v| !matches!(v, serde_json::Value::Null) && v.as_str().map_or(true, |t| !t.trim().is_empty()))" % _rs_str(key)
+
+
 def _leaf_rs(tr) -> str:
+    if tr[0] == "ifcond":
+        # PHP and Rust share && over || precedence, so the chain is emitted as written.
+        cond = " ".join(("%s %s%s" % (j, "!" if n else "", _has_rs(k, key))).strip() for j, n, k, key in tr[1])
+        return "if %s { %s } else { %s }" % (cond, _leaf_rs(tr[2]), _leaf_rs(tr[3]))
     if tr[0] == "ifhas":
         # Laravel: has = key present; filled = present and not an empty string / null.
         cond = "input.contains_key(%s)" % _rs_str(tr[2]) if tr[1] == "has" else             "input.get(%s).is_some_and(|v| !matches!(v, serde_json::Value::Null) && v.as_str().map_or(true, |t| !t.trim().is_empty()))" % _rs_str(tr[2])
@@ -438,6 +461,8 @@ def _uses_input(tr) -> bool:
     if tr[0] == "if":
         return _uses_input(tr[4]) or _uses_input(tr[5])
     if tr[0] == "ifhas":
+        return True
+    if tr[0] == "ifcond":
         return True
     return tr[0] == "input_all" or (tr[0] == "text" and any(k == "query" for k, _ in tr[1]))
 

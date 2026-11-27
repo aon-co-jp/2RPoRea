@@ -178,3 +178,7 @@
 ## 2026-11-27 23:00 `$request->has()` / `filled()`
 **日本語**: `if ([!]$request->has('k')) {...} [else {...}]` と `filled('k')`(キーがあり、空文字・null でない)を条件分岐へ変換。curl実測: `name=Bob`→filled、`name=`→empty、`x=1`→missing。テスト28件成功。条件の組み合わせ(&&・||)は未対応(501)。
 **English**: `if ([!]$request->has('k')) {...} [else {...}]` and `filled('k')` (present and not an empty string or null) now become branches. Measured with curl: `name=Bob` gives filled, `name=` gives empty, `x=1` gives missing. 28 tests pass. Combined conditions (&&, ||) are not supported (501).
+
+## 2026-11-27 23:10 has/filled の && ・ || 組み合わせ / Combined conditions
+**日本語**: `has`/`filled`(否定つき可)を `&&`・`||` でつないだ条件を変換(PHPとRustは&&が||より優先で同じなので、そのまま出力)。curl実測: `filled(a) && !has(b) || has(c)` で a=1→yes、a=1&b=2→no、b=2&c=3→yes、a=→no。テスト29件。括弧や他の条件との混在は未対応(501)。
+**English**: Conditions joining `has`/`filled` (optionally negated) with `&&` and `||` are now converted (PHP and Rust share && over || precedence, so they are emitted as written). Measured with curl for `filled(a) && !has(b) || has(c)`: a=1 yes, a=1&b=2 no, b=2&c=3 yes, a= no. 29 tests. Parentheses or mixing with other conditions are not supported (501).

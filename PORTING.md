@@ -206,3 +206,7 @@
 ## 2026-11-27 22:58 `redirect()->route('name')` / `to_route('name')`
 **日本語**: `->name('名前')` を付けたルートを集め、`redirect()->route('名前')`・`to_route('名前')` をそのパスへの302に変換(パラメーター付きのルート・存在しない名前は501)。curl実測: `/go` → `302` で `/dash`。テスト35件。
 **English**: Routes tagged with `->name('name')` are collected, and `redirect()->route('name')` / `to_route('name')` become a 302 to that path (routes with parameters or unknown names stay 501). Measured with curl: `/go` gives `302` to `/dash`. 35 tests.
+
+## 2026-11-27 23:02 パラメーター付き名前付きルートへの転送 / Named routes with parameters
+**日本語**: `redirect()->route('users.show', ['id' => $id])`(値はルートパラメーターか文字列リテラル)を、`{id}` を埋めたパスへの302に変換。足りないパラメーター・余ったキー(Laravelはクエリ文字列にする)は501。curl実測: `/me/42` → `302` で `/users/42`。テスト36件。
+**English**: `redirect()->route('users.show', ['id' => $id])` (values are route parameters or string literals) now becomes a 302 to the path with `{id}` filled in. Missing parameters or extra keys (Laravel turns them into a query string) stay 501. Measured with curl: `/me/42` gives `302` to `/users/42`. 36 tests.

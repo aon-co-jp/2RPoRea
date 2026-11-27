@@ -184,3 +184,13 @@ def test_redirect_route(tmp_path):
         "Route::get('/x', function () { return to_route('missing'); });\n", encoding="utf-8")
     rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert rs["/go"] == ("redirect", "/dash") and rs["/x"] is None
+
+
+def test_redirect_route_params(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::get('/users/{id}', function ($id) { return 'u'; })->name('users.show');\n"
+        "Route::get('/me/{id}', function ($id) { return redirect()->route('users.show', ['id' => $id]); });\n"
+        "Route::get('/bad', function () { return to_route('users.show'); });\n", encoding="utf-8")
+    rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert rs["/me/:id"] == ("redirectp", [("lit", "/users/"), ("param", "id")]) and rs["/bad"] is None

@@ -377,9 +377,16 @@ def translate(body: str, params: list):
             return ("abort", int(ab.group(1)), msg)
         if re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))", stmts[-1]):
             return ("back",)
-        rr = re.fullmatch(r"return\s+(?:redirect\(\s*\)\s*->\s*route|to_route)\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\)", stmts[-1], re.S)
+        rr = re.fullmatch(r"return\s+(?:redirect\(\s*\)\s*->\s*route|to_route)\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*(?:,\s*\[([^\]]*)\])?\s*\)", stmts[-1], re.S)
         if rr:
-            return ("routeredir", _unquote(rr.group(1)))
+            args = []
+            if rr.group(2):
+                for kv in [x for x in rr.group(2).split(",") if x.strip()]:
+                    mm = re.fullmatch(r"\s*'(\w+)'\s*=>\s*(?:\$(\w+)|'([^'\\]*)')\s*", kv)
+                    if not mm or (mm.group(2) and mm.group(2) not in params):
+                        return None
+                    args.append((mm.group(1), ("param", mm.group(2)) if mm.group(2) else ("lit", mm.group(3))))
+            return ("routeredir", _unquote(rr.group(1)), args)
         rd = re.fullmatch(r"return\s+redirect\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\)(?:\s*->\s*to\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\))?", stmts[-1], re.S)
         if rd:
             target = rd.group(1) if rd.group(1) else rd.group(2)
@@ -411,6 +418,9 @@ def _leaf_rs(tr) -> str:
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
     if tr[0] == "back":
         return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r }"
+    if tr[0] == "redirectp":
+        pieces = " ".join("s.push_str(%s);" % _rs_str(v) if k == "lit" else "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v) for k, v in tr[1])
+        return "{ let mut s = String::new(); %s let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", s.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r }" % pieces
     if tr[0] == "redirect":
         return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", %s.parse().unwrap()); r }" % _rs_str(tr[1])
     if tr[0] == "abort":
@@ -482,7 +492,22 @@ def _resolve_names(tr, names):
         return None
     if tr[0] == "routeredir":
         path = names.get(tr[1])
-        return ("redirect", path) if path and "{" not in path else None
+        if not path:
+            return None
+        args = dict(tr[2]) if len(tr) > 2 else {}
+        parts = []
+        for piece in re.split(r"(\{\w+\??\})", path):
+            pm = re.fullmatch(r"\{(\w+)\??\}", piece)
+            if not pm:
+                if piece:
+                    parts.append(("lit", piece))
+            elif pm.group(1) in args:
+                parts.append(args.pop(pm.group(1)))
+            else:
+                return None
+        if args:  # Laravel appends leftovers as a query string; not reproduced
+            return None
+        return ("redirect", parts[0][1]) if all(k == "lit" for k, _ in parts) and len(parts) == 1 else ("redirectp", parts)
     if tr[0] in ("if", "ifhas"):
         a, b = _resolve_names(tr[4], names), _resolve_names(tr[5], names)
         return None if a is None or b is None else tr[:4] + (a, b)

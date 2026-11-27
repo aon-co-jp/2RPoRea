@@ -370,7 +370,7 @@ def test_view_switch(tmp_path):
     (tmp_path / "routes").mkdir()
     v = tmp_path / "resources" / "views"
     v.mkdir(parents=True)
-    (v / "s.blade.php").write_text("@switch($t) @case('a') A @break @case('b') B @case('c') C @break @default D @endswitch", encoding="utf-8")
+    (v / "s.blade.php").write_text("@switch($t) @case('a') A @break @case(\"b\") B @case('c') C @break @default D @endswitch", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/b', 's', ['t' => 'b']);\nRoute::view('/z', 's', ['t' => 'z']);\n", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/b"] == ("text", [("lit", " B  C ")])

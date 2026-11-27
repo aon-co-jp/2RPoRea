@@ -633,8 +633,9 @@ def routes(root: str) -> list:
                         k = mm.group(1)
                         if not isinstance(data.get(k), str):
                             return mm.group(0)
-                        parts = re.split(r"@(case\s*\(\s*'([^'\\]*)'\s*\)|default)", mm.group(2))
-                        cases = [(parts[i + 1], parts[i + 2]) for i in range(1, len(parts) - 2, 3)]
+                        parts = re.split(r"""@(case\s*\(\s*(?:'([^'\\]*)'|"([^"\\$]*)")\s*\)|default)""", mm.group(2))
+                        cases = [(parts[i + 1] if parts[i + 1] is not None else parts[i + 2], parts[i + 3])
+                                 for i in range(1, len(parts) - 3, 4)]
                         hit = next((i for i, (lab, _) in enumerate(cases) if lab == data[k]), None)
                         if hit is None:
                             hit = next((i for i, (lab, _) in enumerate(cases) if lab is None), None)

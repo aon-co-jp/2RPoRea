@@ -564,7 +564,7 @@ def _leaf_rs(tr) -> str:
                 code += " r.headers_mut().append(\"set-cookie\", flash_old_cookie(&input).parse().unwrap());"
             else:
                 code += " { let keys: &[&str] = &[%s]; let picked: std::collections::HashMap<String, serde_json::Value> = input.iter().filter(|(k, _)| %skeys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect(); r.headers_mut().append(\"set-cookie\", flash_old_cookie(&picked).parse().unwrap()); }" % (", ".join(_rs_str(k) for k in inp[1]), "" if inp[0] == "only" else "!")
-        code += " r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_err\", %s).parse().unwrap());" % _rs_str(json.dumps(errs, ensure_ascii=False))
+        code += " r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_err\", %s).parse().unwrap());" % _rs_str(json.dumps([[k, v] for k, v in errs.items()], ensure_ascii=False))
         return "{ %s r }" % code
     if tr[0] == "back" and len(tr) > 2:
         keep = "" if tr[2] == "only" else "!"
@@ -619,15 +619,28 @@ def _leaf_rs(tr) -> str:
         if k == "err_blk":
             inner = " ".join("s.push_str(%s);" % _rs_str(x) if kk == "lit" else "s.push_str(&message%s);" % esc for kk, x in v[1])
             return "if let Some(message) = errs_get(&errs, %s) { %s }" % (_rs_str(v[0]), inner)
+        if k == "err_all":
+            inner = " ".join("s.push_str(%s);" % _rs_str(x) if kk == "lit" else "s.push_str(&message%s);" % esc for kk, x in v)
+            return "for message in errs_all(&errs) { %s }" % inner
+        if k == "err_if":
+            cond = "!errs.is_empty()" if not v[0] else "errs_get(&errs, %s).is_some()" % _rs_str(v[0])
+            return "if %s { %s } else { %s }" % (cond, " ".join(piece_old(a, b) for a, b in v[1]), " ".join(piece_old(a, b) for a, b in v[2]))
         if k == "old_esc":
             return "s.push_str(&old.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string()).replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\"));" % (_rs_str(v[0]), _rs_str(v[1]))
         return piece(k, v)
     pieces = [piece_old(k, v) for k, v in tr[1]]
-    uses_old = any(k == "old_esc" for k, _ in tr[1])
-    uses_err = any(k in ("err_first", "err_blk") for k, _ in tr[1])
+    def _kinds(ps):
+        for k, v in ps:
+            yield k
+            if k == "err_if":
+                yield from _kinds(v[1])
+                yield from _kinds(v[2])
+    kinds = set(_kinds(tr[1]))
+    uses_old = "old_esc" in kinds
+    uses_err = bool(kinds & {"err_first", "err_blk", "err_all", "err_if"})
     if uses_old or uses_err:
         # old() / @error: read the flashed data once, then expire the cookie (Laravel flash data lives for one request).
-        pre = ("let old = old_input(&req); " if uses_old else "") + ("let errs = flashed(&req, \"rporea_err\"); " if uses_err else "")
+        pre = ("let old = old_input(&req); " if uses_old else "") + ("let errs = flashed_errs(&req); " if uses_err else "")
         clear = " ".join("r.headers_mut().append(\"set-cookie\", \"%s=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax\".parse().unwrap());" % c for c, u in (("rporea_old", uses_old), ("rporea_err", uses_err)) if u)
         return "{ %slet mut s = String::new(); %s let mut r = hyper_compat::html_response(StatusCode::OK, s); %s r }" % (pre, " ".join(pieces), clear)
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
@@ -1424,6 +1437,47 @@ def routes(root: str) -> list:
                     rq.append(("err_blk", (q.group(2), parts)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"@error\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@enderror\b", _errb, html, flags=re.S)
+                def _plain(x):
+                    return not ("{{" in x or "{!!" in x or re.search(r"(?<![\w@])@\w", x) or chr(1) in x)
+                # @foreach($errors->all() as $e) ... {{ $e }} ... @endforeach: every flashed message, in order.
+                def _erra(q):
+                    segs = re.split(r"\{\{\s*\$" + q.group(1) + r"\s*\}\}", q.group(2))
+                    if not all(_plain(x) for x in segs):
+                        return q.group(0)
+                    parts = []
+                    for i, x in enumerate(segs):
+                        if i:
+                            parts.append(("msg", ""))
+                        if x:
+                            parts.append(("lit", x))
+                    rq.append(("err_all", parts))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"@foreach\s*\(\s*\$errors\s*->\s*all\(\s*\)\s+as\s+\$(\w+)\s*\)(.*?)@endforeach\b", _erra, html, flags=re.S)
+                # @if($errors->any()) / @if($errors->has('k')) ... [@else ...] @endif with plain bodies (the body may hold
+                # the tokens made above, e.g. an @foreach over all messages).
+                def _errif(q):
+                    then, other = q.group(3), q.group(4) or ""
+                    tok = re.compile(chr(1) + r"RQ(\d+)" + chr(1))
+                    def _parts(x):
+                        out = []
+                        for i, seg in enumerate(tok.split(x)):
+                            if i % 2:
+                                e = rq[int(seg)]
+                                if e[0] not in ("err_all", "err_first", "err_blk", "old_esc"):
+                                    raise ValueError
+                                out.append(e)
+                            elif seg:
+                                if not _plain(seg):
+                                    raise ValueError
+                                out.append(("lit", seg))
+                        return out
+                    try:
+                        tp, op = _parts(then), _parts(other)
+                    except ValueError:
+                        return q.group(0)
+                    rq.append(("err_if", (q.group(2) or "", tp, op)))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"@if\s*\(\s*\$errors\s*->\s*(?:any\(\s*\)|has\(\s*(['\"])([\w.-]+)\1\s*\))\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _errif, html, flags=re.S)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None
@@ -1437,7 +1491,7 @@ def routes(root: str) -> list:
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
                         e = rq[int(seg)]
-                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk") else ("query_esc", e))
+                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if") else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])
@@ -1587,16 +1641,29 @@ fn flashed(req: &Request, name: &str) -> serde_json::Map<String, serde_json::Val
     }
 }
 
-/// Laravel `$errors->first('k')` / `@error('k')`: the first message for the key.
-fn errs_get(errs: &serde_json::Map<String, serde_json::Value>, k: &str) -> Option<String> {
-    match errs.get(k)? {
-        serde_json::Value::String(t) => Some(t.clone()),
-        serde_json::Value::Array(a) => a.first().and_then(|v| v.as_str()).map(|t| t.to_string()),
-        _ => None,
-    }
+/// Laravel's error bag flashed by `withErrors()`: [[key, [messages...]], ...] in the order they were given.
+fn flashed_errs(req: &Request) -> Vec<(String, Vec<String>)> {
+    let raw = req.headers().get_all("cookie").iter().filter_map(|h| h.to_str().ok()).flat_map(|h| h.split(';')).find_map(|c| c.trim().strip_prefix("rporea_err=").map(|v| v.to_string()));
+    let Some(serde_json::Value::Array(items)) = raw.and_then(|v| serde_json::from_str::<serde_json::Value>(&form_decode(&v)).ok()) else { return Vec::new() };
+    items.iter().filter_map(|it| {
+        let pair = it.as_array()?;
+        let k = pair.first()?.as_str()?.to_string();
+        let msgs: Vec<String> = pair.get(1)?.as_array()?.iter().filter_map(|m| m.as_str()).map(|m| m.to_string()).collect();
+        Some((k, msgs))
+    }).collect()
 }
 
-fn err_first(errs: &serde_json::Map<String, serde_json::Value>, k: &str) -> String {
+/// Laravel `$errors->first('k')` / `@error('k')`: the first message for the key.
+fn errs_get(errs: &[(String, Vec<String>)], k: &str) -> Option<String> {
+    errs.iter().find(|(kk, _)| kk == k).and_then(|(_, m)| m.first().cloned())
+}
+
+/// Laravel `$errors->all()`: every message, keys in flashed order, each key's messages in order.
+fn errs_all(errs: &[(String, Vec<String>)]) -> Vec<String> {
+    errs.iter().flat_map(|(_, m)| m.iter().cloned()).collect()
+}
+
+fn err_first(errs: &[(String, Vec<String>)], k: &str) -> String {
     errs_get(errs, k).unwrap_or_default()
 }
 

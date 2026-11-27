@@ -836,4 +836,18 @@ def test_with_errors_and_error_directive(tmp_path):
     assert r["/q"] is None
     assert r["/f"] == ("text", [("err_blk", ("name", [("lit", "<p>"), ("msg", ""), ("lit", "</p>")])), ("err_first", "age")])
     src = render_main(rts)
-    assert "flash_cookie(\"rporea_err\"" in src and "flashed(&req, \"rporea_err\")" in src
+    assert "flash_cookie(\"rporea_err\"" in src and "flashed_errs(&req)" in src
+
+
+def test_errors_any_has_all(tmp_path):
+    from torporea.php import routes, render_main
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/f', 'f');\nRoute::post('/p', function () { return back()->withErrors(['z' => 'Z', 'a' => 'A']); });\n", encoding="utf-8")
+    (tmp_path / "resources/views/f.blade.php").write_text("@if($errors->any())<ul>@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>@else OK@endif|@if($errors->has('age'))bad@endif", encoding="utf-8")
+    rts = routes(str(tmp_path))
+    r = {p: tr for _, p, _, tr, _ in rts}
+    assert r["/f"] == ("text", [("err_if", ("", [("lit", "<ul>"), ("err_all", [("lit", "<li>"), ("msg", ""), ("lit", "</li>")]), ("lit", "</ul>")], [("lit", " OK")])), ("lit", "|"), ("err_if", ("age", [("lit", "bad")], []))])
+    src = render_main(rts)
+    assert "errs_all(&errs)" in src and "!errs.is_empty()" in src
+    # the flashed bag keeps the given order (z before a), as Laravel's MessageBag does
+    assert '[[\\"z\\", [\\"Z\\"]], [\\"a\\", [\\"A\\"]]]' in src

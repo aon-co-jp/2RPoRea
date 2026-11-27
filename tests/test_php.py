@@ -375,3 +375,14 @@ def test_view_switch(tmp_path):
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/b"] == ("text", [("lit", " B  C ")])
     assert r["/z"] == ("text", [("lit", " D ")])
+
+
+def test_view_default(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "d.blade.php").write_text("{{ $a ?? 'x<' }}|{{ $b ?? \"y\" }}", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/d', 'd', ['a' => 'A']);\nRoute::view('/n', 'd');\n", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/d"] == ("text", [("lit", "A|y")])
+    assert r["/n"] == ("text", [("lit", "x&lt;|y")])

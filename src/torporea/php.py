@@ -660,6 +660,13 @@ def routes(root: str) -> list:
                     html = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda mm: _h.escape(data[mm.group(1)]) if isinstance(data.get(mm.group(1)), str) else mm.group(0), html)
                     # {!! $key !!} prints the value unescaped, as Blade does.
                     html = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda mm: data[mm.group(1)] if isinstance(data.get(mm.group(1)), str) else mm.group(0), html)
+            if html is not None:
+                # {{ $k ?? 'default' }}: the literal value when given (escaped), else the default (escaped), as Blade does.
+                import html as _h2
+                _d = data if m.group(5) else {}
+                html = re.sub(r"""\{\{\s*\$(\w+)\s*\?\?\s*(?:'([^'\\]*)'|"([^"\\$]*)")\s*\}\}""",
+                              lambda q: _h2.escape(_d[q.group(1)] if isinstance(_d.get(q.group(1)), str)
+                                                   else (q.group(2) if q.group(2) is not None else q.group(3))), html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None

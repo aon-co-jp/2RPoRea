@@ -355,3 +355,12 @@ def test_view_foreach_loop(tmp_path):
     (v / "e.blade.php").write_text("@foreach($xs as $x){{ $loop->iteration }}/{{ $loop->count }}={{ $x }}@if(!$loop->last),@endif@endforeach", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/e', 'e', ['xs' => ['a', 'b']]);\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/e"] == ("text", [("lit", "1/2=a,2/2=b")])
+
+
+def test_view_for(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "f.blade.php").write_text("@for($i = 1; $i <= 3; $i++)[{{ $i }}]@endfor", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f', ['n' => 'x']);\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/f"] == ("text", [("lit", "[1][2][3]")])

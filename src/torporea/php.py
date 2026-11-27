@@ -617,6 +617,16 @@ def routes(root: str) -> list:
                             return re.sub(r"\{!!\s*\$" + v + r"\s*!!\}", lambda _m: x, b)
                         return "".join(_one(i, x) for i, x in enumerate(xs))
                     html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+\$(\w+)\s*\)(.*?)@endforeach\b", _each, html, flags=re.S)
+                    # @for($i = A; $i < / <= B; $i++) with integer literals: unrolled at convert time (capped at 1000).
+                    def _for(mm):
+                        v, a, op, b = mm.group(1), int(mm.group(2)), mm.group(4), int(mm.group(5))
+                        if mm.group(3) != v or mm.group(6) != v:
+                            return mm.group(0)
+                        rng = range(a, b + 1 if op == "<=" else b)
+                        if len(rng) > 1000:
+                            return mm.group(0)
+                        return "".join(re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", str(i), mm.group(7)) for i in rng)
+                    html = re.sub(r"@for\s*\(\s*\$(\w+)\s*=\s*(-?\d+)\s*;\s*\$(\w+)\s*(<=?)\s*(-?\d+)\s*;\s*\$(\w+)\+\+\s*\)(.*?)@endfor\b", _for, html, flags=re.S)
                     def _blk(mm):
                         k = mm.group(2)
                         if mm.group(1) in ("if", "unless") and k not in data:

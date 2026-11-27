@@ -615,7 +615,7 @@ def routes(root: str) -> list:
                     return "".join(out)
                 html = re.sub(r"@for\s*\(\s*\$(\w+)\s*=\s*(-?\d+)\s*;\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*(-?\d+)\s*;\s*\$(\w+)\s*(\+\+|--|\+=|-=)\s*(\d*)\s*\)(.*?)@endfor\b", _for, html, flags=re.S)
             data = {}
-            if html is not None and (m.group(5) or "@php" in html or "range(" in html):
+            if html is not None and (m.group(5) or "@php" in html or "range(" in html or "{{" in html):
                 # Route::view data: literal 'key' => 'value' pairs fill {{ $key }} (HTML-escaped, as Blade does).
                 import html as _h
                 # 'key' => 'value' or 'key' => ['a', 'b'] (a list of literal strings, for @foreach).

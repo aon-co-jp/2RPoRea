@@ -696,3 +696,14 @@ def test_view_arith_and_item_functions(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("{{ strtoupper($xs[0]) }}|{{ $n * 3 }}|{{ strlen('abc') }}|{{ ($n + 1) * 2 - 1 }}|{{ $n / 4 }}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "A|6|3|5|0.5")])
+
+
+def test_view_arith_without_data(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g');\nRoute::view('/u', 'u');\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("{{ 1 + 2 * 3 }}|{{ strlen('ab') }}", encoding="utf-8")
+    (tmp_path / "resources/views/u.blade.php").write_text("{{ $unknown }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "7|2")])
+    assert r["/u"] is None

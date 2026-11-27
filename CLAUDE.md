@@ -107,3 +107,4 @@
 - 08:18 `@while` の刻み(`$i += N`・`$i -= N`)に対応、curlで実測。 / `@while` steps (`+= N`, `-= N`), measured with curl.
 - 08:19 `@foreach(range(A, B[, 刻み]))` に対応、curlで実測。 / `@foreach(range(A, B[, step]))` supported, measured with curl.
 - 08:21 ビューの計算式(`{{ $n * 3 }}` など)と要素への関数(`strtoupper($xs[0])`・`strlen('abc')`)に対応、curlで実測。 / View arithmetic and functions on items, measured with curl.
+- 08:22 データなしビューの計算式にも対応、curlで実測。 / Arithmetic in views without data, measured with curl.

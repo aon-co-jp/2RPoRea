@@ -573,7 +573,7 @@ def routes(root: str) -> list:
             prev = [pth for st, pth in starts if st < nm.start()]
             if prev:
                 names.setdefault(nm.group(2), prev[-1])
-        for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*(?:,\s*\[([^\]]*)\])?\s*\)", t, re.S):
+        for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*(?:,\s*\[((?:[^\[\]]|\[[^\[\]]*\])*)\])?\s*\)", t, re.S):
             full = (prefix + "/" + m.group(2).strip("/")).rstrip("/") or "/"
             vf = os.path.join(root, "resources", "views", *m.group(4).split(".")) + ".blade.php"
             html = open(vf, encoding="utf-8").read() if os.path.exists(vf) else None
@@ -586,27 +586,40 @@ def routes(root: str) -> list:
                 # Route::view data: literal 'key' => 'value' pairs fill {{ $key }} (HTML-escaped, as Blade does).
                 import html as _h
                 data = {}
-                for kv in [x for x in m.group(5).split(",") if x.strip()]:
-                    mm = re.fullmatch(r"\s*'(\w+)'\s*=>\s*'([^'\\]*)'\s*", kv)
-                    if not mm:
+                # 'key' => 'value' or 'key' => ['a', 'b'] (a list of literal strings, for @foreach).
+                rest = m.group(5).strip().rstrip(",").strip()
+                item = re.compile(r"\s*'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\[\s*((?:'[^'\\]*'\s*,?\s*)*)\])\s*(?:,|$)")
+                pos = 0
+                while pos < len(rest):
+                    mm = item.match(rest, pos)
+                    if not mm or mm.end() == pos:
                         html = None
                         break
-                    data[mm.group(1)] = mm.group(2)
+                    data[mm.group(1)] = mm.group(2) if mm.group(2) is not None else re.findall(r"'([^'\\]*)'", mm.group(3))
+                    pos = mm.end()
                 if html is not None:
                     # @if($k) / @isset($k) ... [@else ...] @endif / @endisset with literal data: decided at convert time
                     # (PHP truthiness of a string: '' and '0' are false). Unknown keys keep the block (stays 501).
+                    # @foreach($list as $v) ... @endforeach over a literal list: unrolled at convert time.
+                    def _each(mm):
+                        k, v, body = mm.group(1), mm.group(2), mm.group(3)
+                        if not isinstance(data.get(k), list):
+                            return mm.group(0)
+                        return "".join(re.sub(r"\{!!\s*\$" + v + r"\s*!!\}", lambda _m, x=x: x,
+                                              re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", lambda _m, x=x: _h.escape(x), body)) for x in data[k])
+                    html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+\$(\w+)\s*\)(.*?)@endforeach\b", _each, html, flags=re.S)
                     def _blk(mm):
                         k = mm.group(2)
                         if mm.group(1) in ("if", "unless") and k not in data:
                             return mm.group(0)
-                        ok = (k in data) if mm.group(1) == "isset" else data[k] not in ("", "0")
+                        ok = (k in data) if mm.group(1) == "isset" else (bool(data[k]) if isinstance(data[k], list) else data[k] not in ("", "0"))
                         if mm.group(1) == "unless":
                             ok = not ok
                         return mm.group(3) if ok else (mm.group(4) or "")
                     html = re.sub(r"@(if|isset|unless)\s*\(\s*\$(\w+)\s*\)(.*?)(?:@else(.*?))?@end(?:if|isset|unless)\b", _blk, html, flags=re.S)
-                    html = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda mm: _h.escape(data[mm.group(1)]) if mm.group(1) in data else mm.group(0), html)
+                    html = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda mm: _h.escape(data[mm.group(1)]) if isinstance(data.get(mm.group(1)), str) else mm.group(0), html)
                     # {!! $key !!} prints the value unescaped, as Blade does.
-                    html = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda mm: data[mm.group(1)] if mm.group(1) in data else mm.group(0), html)
+                    html = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda mm: data[mm.group(1)] if isinstance(data.get(mm.group(1)), str) else mm.group(0), html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None

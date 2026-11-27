@@ -274,3 +274,9 @@
 ## 2026-11-27 23:32 Bladeの @unless / Blade @unless
 **日本語**: 固定データの `@unless($k) ... @else ... @endunless` を変換時に決める(@if の逆)。curl実測: vip=''→plain、vip='1'→gold。テスト51件。
 **English**: `@unless($k) ... @else ... @endunless` with literal data is decided at convert time (the inverse of @if). Measured: vip='' plain, vip='1' gold. 51 tests.
+
+- **2026-11-28 07:15 追記 / Addendum**: 2RPoRea で Blade の `@foreach($list as $v)` を、Route::view の固定の文字列リスト(`'items' => ['a', 'b']`)に対して変換時に展開(`{{ $v }}` はエスケープ、`{!! $v !!}` はそのまま、`@if($list)` は空でなければ真)。curl 実測で `<li>a&lt;b</li><li>c</li>`、テスト52件。`$loop` は未対応。*Blade `@foreach` over a literal string list in Route::view is unrolled at convert time (measured with curl, 52 tests; `$loop` not supported).*
+
+### 2026-11-28 07:15 再開用メッセージ / Resume message
+**日本語**: 前の続きです。2RPoRea `src/torporea/php.py`(Laravel→RPoem)はテスト52件。条件(has/filled/missing/boolean・配列形・input/ルートパラメーター比較・かっこ・elseif)、abort/redirect/back/route()、Route::view(固定データ、`{{ }}`・`{!! !!}`・`{{-- --}}`・`@{{ }}`・`@if`/`@isset`/`@unless`・文字列リストの`@foreach`)まで。実測は `F:\_fix\lv` を convert し `F:\_fix\lv3.sh`(WSL Ubuntu-24.04)。未了: withInput(セッション層)、`$loop`・`@for`/`@while`、変数値のビュー、PHPの緩い==。決まり: 実測してから完了、秘密は書かない、新RESTなし、返答は日本語のみ。
+**English**: Continuing. 2RPoRea `src/torporea/php.py` (Laravel to RPoem) has 52 tests: conditions, abort/redirect/back/route(), and Route::view with literal data (`{{ }}`, `{!! !!}`, `{{-- --}}`, `@{{ }}`, `@if`/`@isset`/`@unless`, `@foreach` over string lists). Measure by converting `F:\_fix\lv` and running `F:\_fix\lv3.sh` (WSL Ubuntu-24.04). Open: withInput (session layer), `$loop`, `@for`/`@while`, views with variable values, PHP loose ==. Rules: measure before done, no secrets, no new REST, reply in Japanese only.

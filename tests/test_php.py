@@ -337,3 +337,12 @@ def test_view_unless(tmp_path):
     (v / "u.blade.php").write_text("@unless($a)N@else Y@endunless", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/u', 'u', ['a' => '']);\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/u"] == ("text", [("lit", "N")])
+
+
+def test_view_foreach(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "e.blade.php").write_text("@foreach($xs as $x)<i>{{ $x }}</i>@endforeach@if($xs)Y@endif", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/e', 'e', ['xs' => ['a<b', 'c']]);\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/e"] == ("text", [("lit", "<i>a&lt;b</i><i>c</i>Y")])

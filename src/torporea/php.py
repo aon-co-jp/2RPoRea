@@ -352,10 +352,10 @@ def _cond_tokens(s: str, params=()):
                 if m.group(4) not in params:
                     return None
                 n2 = neg != m.group(5).startswith("!")
-                out.append((j, n2, "peq", m.group(4) + "\0" + m.group(6))); j, neg, want_atom = "", False, False
+                out.append((j, n2, "peq" if m.group(5) in ("===", "!==") else "lpeq", m.group(4) + "\0" + m.group(6))); j, neg, want_atom = "", False, False
             elif m.group(7):
                 n2 = neg != m.group(8).startswith("!")
-                out.append((j, n2, "eq", m.group(7) + "\0" + m.group(9))); j, neg, want_atom = "", False, False
+                out.append((j, n2, "eq" if m.group(8) in ("===", "!==") else "leq", m.group(7) + "\0" + m.group(9))); j, neg, want_atom = "", False, False
             else:
                 return None
         else:
@@ -418,6 +418,9 @@ def translate(body: str, params: list):
         other = translate(em.group(1), params) if em else translate(rest, params)
         if then is None or other is None or lit[0] != "text" or any(k != "lit" for k, _ in lit[1]):
             return None
+        if m.group(2) in ("==", "!="):
+            # loose == / != on a route parameter: PHP numeric-string comparison
+            return ("ifcond", [("", m.group(2).startswith("!"), "lpeq", m.group(1) + "\0" + "".join(v for _, v in lit[1]))], then, other)
         return ("if", m.group(1), m.group(2).startswith("!"), "".join(v for _, v in lit[1]), then, other)
     m = _IFMULTI.match(b)
     if m:
@@ -499,6 +502,12 @@ def _has_rs(kind: str, key: str) -> str:
     if kind == "peq":
         k, v = key.split("\0", 1)
         return "(params.get(%s).unwrap_or(\"\") == %s)" % (_rs_str(k), _rs_str(v))
+    if kind in ("leq", "lpeq"):
+        # PHP 8 loose ==: numeric strings compare as numbers, null == '', bools by truthiness.
+        k, v = key.split("\0", 1)
+        if kind == "lpeq":
+            return "php_loose_eq(params.get(%s).map(|s| serde_json::Value::String(s.to_string())).as_ref(), %s)" % (_rs_str(k), _rs_str(v))
+        return "php_loose_eq(input.get(%s), %s)" % (_rs_str(k), _rs_str(v))
     if kind == "eq":
         # Form and JSON strings compare as text; other JSON values never equal a string literal.
         k, v = key.split("\0", 1)
@@ -910,6 +919,31 @@ async fn read_input(req: Request) -> std::collections::HashMap<String, serde_jso
         }
     }
     input
+}
+
+/// PHP 8 `$x == 'lit'` for a request value (strict `===` is a plain string comparison instead).
+/// Numeric strings (optional surrounding whitespace, sign, decimals, exponent) compare as numbers.
+fn php_loose_eq(v: Option<&serde_json::Value>, lit: &str) -> bool {
+    fn num(s: &str) -> Option<f64> {
+        let t = s.trim_matches(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r' | '\x0b' | '\x0c'));
+        let ok = !t.is_empty()
+            && t.bytes().all(|b| b.is_ascii_digit() || matches!(b, b'+' | b'-' | b'.' | b'e' | b'E'))
+            && t.bytes().any(|b| b.is_ascii_digit());
+        if ok { t.parse::<f64>().ok() } else { None }
+    }
+    match v {
+        None | Some(serde_json::Value::Null) => lit.is_empty(),
+        Some(serde_json::Value::Bool(b)) => *b == !(lit.is_empty() || lit == "0"),
+        Some(serde_json::Value::String(s)) => match (num(s), num(lit)) {
+            (Some(a), Some(b)) => a == b,
+            _ => s == lit,
+        },
+        Some(serde_json::Value::Number(n)) => match (n.as_f64(), num(lit)) {
+            (Some(a), Some(b)) => a == b,
+            _ => n.to_string() == lit,
+        },
+        _ => false,
+    }
 }
 
 fn form_decode(s: &str) -> String {

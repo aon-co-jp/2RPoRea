@@ -88,10 +88,11 @@ def test_if_on_route_parameter():
     t = translate("if ($name === 'admin') { return 'Hello boss'; } return 'Hi ' . $name;", ["name"])
     assert t == ("if", "name", False, "admin", ("text", [("lit", "Hello boss")]), ("text", [("lit", "Hi "), ("param", "name")]))
     t2 = translate("if ($n != \"a\") { return ['ok' => true]; } else { return 'a'; }", ["n"])
-    assert t2[:4] == ("if", "n", True, "a") and t2[4] == ("json", {"ok": True})
+    # loose != becomes a PHP-style comparison (numeric strings compare as numbers)
+    assert t2[0] == "ifcond" and t2[1][0][1:3] == (True, "lpeq") and t2[2] == ("json", {"ok": True})
     # chained: the rest is itself an if
     t3 = translate("if ($n == 'a') { return '1'; } if ($n == 'b') { return '2'; } return '3';", ["n"])
-    assert t3[5][0] == "if"
+    assert t3[0] == "ifcond" and t3[3][0] == "ifcond"
     # not a route parameter, or a body with logic inside: still 501
     assert translate("if ($x == 'a') { return '1'; } return '2';", ["n"]) is None
     assert translate("if ($n == 'a') { foo(); return '1'; } return '2';", ["n"]) is None
@@ -280,7 +281,7 @@ def test_input_eq_condition(tmp_path):
     (tmp_path / "routes" / "web.php").write_text(
         "<?php\nRoute::post('/e', function (Request $request) {\n    if ($request->input('m') === 'd' || $request->input('y') != 'z') { return 'hit'; }\n    return 'miss';\n});\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/e"]
-    assert tr[0] == "ifcond" and [(n, k) for _, n, k, _ in tr[1]] == [(False, "eq"), (True, "eq")]
+    assert tr[0] == "ifcond" and [(n, k) for _, n, k, _ in tr[1]] == [(False, "eq"), (True, "leq")]
 
 
 def test_elseif(tmp_path):

@@ -597,11 +597,13 @@ def routes(root: str) -> list:
                     # (PHP truthiness of a string: '' and '0' are false). Unknown keys keep the block (stays 501).
                     def _blk(mm):
                         k = mm.group(2)
-                        if mm.group(1) == "if" and k not in data:
+                        if mm.group(1) in ("if", "unless") and k not in data:
                             return mm.group(0)
                         ok = (k in data) if mm.group(1) == "isset" else data[k] not in ("", "0")
+                        if mm.group(1) == "unless":
+                            ok = not ok
                         return mm.group(3) if ok else (mm.group(4) or "")
-                    html = re.sub(r"@(if|isset)\s*\(\s*\$(\w+)\s*\)(.*?)(?:@else(.*?))?@end(?:if|isset)\b", _blk, html, flags=re.S)
+                    html = re.sub(r"@(if|isset|unless)\s*\(\s*\$(\w+)\s*\)(.*?)(?:@else(.*?))?@end(?:if|isset|unless)\b", _blk, html, flags=re.S)
                     html = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda mm: _h.escape(data[mm.group(1)]) if mm.group(1) in data else mm.group(0), html)
                     # {!! $key !!} prints the value unescaped, as Blade does.
                     html = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda mm: data[mm.group(1)] if mm.group(1) in data else mm.group(0), html)

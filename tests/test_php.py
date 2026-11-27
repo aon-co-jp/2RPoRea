@@ -328,3 +328,12 @@ def test_view_if_isset(tmp_path):
         "<?php\nRoute::view('/c', 'c', ['a' => '0', 'b' => '']);\nRoute::view('/d', 'c', ['b' => 'x']);\n", encoding="utf-8")
     rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert rs["/c"] == ("text", [("lit", " B|b")]) and rs["/d"] is None
+
+
+def test_view_unless(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "u.blade.php").write_text("@unless($a)N@else Y@endunless", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/u', 'u', ['a' => '']);\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/u"] == ("text", [("lit", "N")])

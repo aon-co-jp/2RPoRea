@@ -580,6 +580,8 @@ def routes(root: str) -> list:
             if html is not None:
                 # Blade comments {{-- ... --}} never reach the output.
                 html = re.sub(r"\{\{--.*?--\}\}", "", html, flags=re.S)
+                # @{{ ... }} is Blade's escape for a literal {{ ... }} (e.g. for JS templates).
+                html = html.replace("@{{", "\x00LB\x00")
             if html is not None and m.group(5):
                 # Route::view data: literal 'key' => 'value' pairs fill {{ $key }} (HTML-escaped, as Blade does).
                 import html as _h
@@ -597,6 +599,8 @@ def routes(root: str) -> list:
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html)):
                 html = None
+            if html is not None:
+                html = html.replace("\x00LB\x00", "{{")
             if "{" in full:
                 continue
             out.append(("GET", full, [], ("text", [("lit", html)]) if html is not None else None, os.path.relpath(vf, root).replace(os.sep, "/")))

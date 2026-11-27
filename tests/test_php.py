@@ -307,3 +307,13 @@ def test_view_raw_and_comment(tmp_path):
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/r', 'r', ['x' => '<b>']);\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/r"]
     assert tr == ("text", [("lit", "<p><b>|&lt;b&gt;</p>")])
+
+
+def test_view_at_escape(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "a.blade.php").write_text("<p>@{{ x }}</p>", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/a', 'a');\n", encoding="utf-8")
+    tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/a"]
+    assert tr == ("text", [("lit", "<p>{{ x }}</p>")])

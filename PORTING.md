@@ -262,3 +262,7 @@
 ## 2026-11-27 23:27 Bladeのコメントと {!! !!} / Blade comments and raw output
 **日本語**: ビューの `{{-- コメント --}}` を取り除き、`Route::view` のデータで `{!! $k !!}`(エスケープしない)を埋めるようにした。curl実測: `<b>x</b>` が `{!! !!}` ではそのまま、`{{ }}` では `&lt;b&gt;x&lt;/b&gt;`。テスト48件。
 **English**: Blade comments `{{-- --}}` are removed, and `Route::view` data fills `{!! $k !!}` unescaped. Measured: `<b>x</b>` stays raw in `{!! !!}` and becomes `&lt;b&gt;x&lt;/b&gt;` in `{{ }}`. 48 tests.
+
+## 2026-11-27 23:29 Bladeの @{{ }} / Blade @{{ }} escape
+**日本語**: ビューの `@{{ x }}`(JS等のために `{{ x }}` をそのまま出すBladeの書き方)を文字どおり出力。curl実測: `<p>@{{ name }} {{ $n }}</p>` → `<p>{{ name }} N</p>`。テスト49件。
+**English**: Blade's `@{{ x }}` (print `{{ x }}` literally, e.g. for JS templates) is emitted as is. Measured: `<p>@{{ name }} {{ $n }}</p>` gives `<p>{{ name }} N</p>`. 49 tests.

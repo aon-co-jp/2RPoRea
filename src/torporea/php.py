@@ -620,6 +620,23 @@ def routes(root: str) -> list:
                 if html is not None:
                     for pat in (r"@php\s*\((.*?)\)", r"@php\b(.*?)@endphp\b"):
                         html = re.sub(pat, lambda q: q.group(0) if _php(q.group(1)) is None else "", html, flags=re.S)
+                    # @while($i < N) ... @php($i++) ... @endwhile with an integer $i set by @php: unrolled (capped at 1000).
+                    def _while(q):
+                        v, op, n, body = q.group(1), q.group(2), int(q.group(3)), q.group(4)
+                        steps = re.findall(r"@php\s*\(\s*\$" + v + r"\s*(\+\+|--)\s*\)", body)
+                        if len(steps) != 1 or not re.fullmatch(r"-?\d+", data.get(v, "") if isinstance(data.get(v), str) else ""):
+                            return q.group(0)
+                        i, d, out = int(data[v]), (1 if steps[0] == "++" else -1), []
+                        test = {"<": lambda a: a < n, "<=": lambda a: a <= n, ">": lambda a: a > n, ">=": lambda a: a >= n, "!=": lambda a: a != n}[op]
+                        while test(i):
+                            if len(out) >= 1000:
+                                return q.group(0)
+                            pre, post = re.split(r"@php\s*\(\s*\$" + v + r"\s*(?:\+\+|--)\s*\)", body)
+                            out.append(re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", str(i), pre) + re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", str(i + d), post))
+                            i += d
+                        data[v] = str(i)
+                        return "".join(out)
+                    html = re.sub(r"@while\s*\(\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*(-?\d+)\s*\)(.*?)@endwhile\b", _while, html, flags=re.S)
                 if html is not None:
                     # @if($k) / @isset($k) ... [@else ...] @endif / @endisset with literal data: decided at convert time
                     # (PHP truthiness of a string: '' and '0' are false). Unknown keys keep the block (stays 501).

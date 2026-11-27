@@ -543,3 +543,12 @@ def test_view_list_index(tmp_path):
     (tmp_path / "resources/views/i.blade.php").write_text("{{ $xs[1] }}|{!! $xs[0] !!}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/i"] == ("text", [("lit", "&lt;b&gt;|a")])
+
+
+def test_view_assoc_key(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/a', 'a', ['u' => ['name' => 'Ann', 'tag' => '<i>']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/a.blade.php").write_text("{{ $u['name'] }}|{{ $u['tag'] }}|{!! $u['tag'] !!}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/a"] == ("text", [("lit", "Ann|&lt;i&gt;|<i>")])

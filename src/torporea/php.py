@@ -610,14 +610,14 @@ def routes(root: str) -> list:
                 import html as _h
                 # 'key' => 'value' or 'key' => ['a', 'b'] (a list of literal strings, for @foreach).
                 rest = (m.group(5) or "").strip().rstrip(",").strip()
-                item = re.compile(r"\s*'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\[\s*((?:'[^'\\]*'\s*,?\s*)*)\])\s*(?:,|$)")
+                item = re.compile(r"\s*'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\[\s*((?:'[^'\\]*'\s*,?\s*)*)\]|\[\s*((?:'\w+'\s*=>\s*'[^'\\]*'\s*,?\s*)+)\])\s*(?:,|$)")
                 pos = 0
                 while pos < len(rest):
                     mm = item.match(rest, pos)
                     if not mm or mm.end() == pos:
                         html = None
                         break
-                    data[mm.group(1)] = mm.group(2) if mm.group(2) is not None else re.findall(r"'([^'\\]*)'", mm.group(3))
+                    data[mm.group(1)] = mm.group(2) if mm.group(2) is not None else (re.findall(r"'([^'\\]*)'", mm.group(3)) if mm.group(3) is not None else dict(re.findall(r"'(\w+)'\s*=>\s*'([^'\\]*)'", mm.group(4))))
                     pos = mm.end()
                 # @php($x = 'v') and @php $x = 'v'; ... @endphp with only literal string assignments set view data.
                 def _php(code):
@@ -792,6 +792,13 @@ def routes(root: str) -> list:
                     if not isinstance(v, list) or not (0 <= i < len(v)) or not isinstance(v[i], str):
                         return q.group(0)
                     return _h2.escape(v[i]) if esc else v[i]
+                def _key(q, esc):
+                    v = _d.get(q.group(1))
+                    if not isinstance(v, dict) or not isinstance(v.get(q.group(2)), str):
+                        return q.group(0)
+                    return _h2.escape(v[q.group(2)]) if esc else v[q.group(2)]
+                html = re.sub(r"\{\{\s*\$(\w+)\[\s*'(\w+)'\s*\]\s*\}\}", lambda q: _key(q, True), html)
+                html = re.sub(r"\{!!\s*\$(\w+)\[\s*'(\w+)'\s*\]\s*!!\}", lambda q: _key(q, False), html)
                 html = re.sub(r"\{\{\s*\$(\w+)\[\s*(\d+)\s*\]\s*\}\}", lambda q: _idx(q, True), html)
                 html = re.sub(r"\{!!\s*\$(\w+)\[\s*(\d+)\s*\]\s*!!\}", lambda q: _idx(q, False), html)
                 # {{ $k OP 'lit' ? 'a' : 'b' }} with == != === !== < > <= >= (PHP 8 string comparison: numeric strings compare as numbers).

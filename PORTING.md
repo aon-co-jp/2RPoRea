@@ -202,3 +202,7 @@
 ## 2026-11-27 22:52 `->header('K', 'V')`
 **日本語**: `response(...)` / `response()->json(...)` の後ろに続く `->header('名前', '値')`(複数可、文字列リテラルのみ)を応答ヘッダーへ変換。curl実測: `/hd` → `201 Created` と `x-id: 7`。テスト34件。
 **English**: `->header('Name', 'Value')` chained after `response(...)` or `response()->json(...)` (several allowed, string literals only) now sets response headers. Measured with curl: `/hd` gives `201 Created` and `x-id: 7`. 34 tests.
+
+## 2026-11-27 22:58 `redirect()->route('name')` / `to_route('name')`
+**日本語**: `->name('名前')` を付けたルートを集め、`redirect()->route('名前')`・`to_route('名前')` をそのパスへの302に変換(パラメーター付きのルート・存在しない名前は501)。curl実測: `/go` → `302` で `/dash`。テスト35件。
+**English**: Routes tagged with `->name('name')` are collected, and `redirect()->route('name')` / `to_route('name')` become a 302 to that path (routes with parameters or unknown names stay 501). Measured with curl: `/go` gives `302` to `/dash`. 35 tests.

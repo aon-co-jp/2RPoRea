@@ -174,3 +174,13 @@ def test_response_header():
     assert t == ("hdr", [("X-Id", "7")], ("status", 201, ("text", [("lit", "a")])))
     s = render_main([("GET", "/h", [], t, "routes/web.php")])
     assert 'insert("x-id", "7".parse().unwrap())' in s
+
+
+def test_redirect_route(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::get('/dash', function () { return 'd'; })->name('dashboard');\n"
+        "Route::get('/go', function () { return redirect()->route('dashboard'); });\n"
+        "Route::get('/x', function () { return to_route('missing'); });\n", encoding="utf-8")
+    rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert rs["/go"] == ("redirect", "/dash") and rs["/x"] is None

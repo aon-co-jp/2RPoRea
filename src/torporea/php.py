@@ -377,6 +377,9 @@ def translate(body: str, params: list):
             return ("abort", int(ab.group(1)), msg)
         if re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))", stmts[-1]):
             return ("back",)
+        rr = re.fullmatch(r"return\s+(?:redirect\(\s*\)\s*->\s*route|to_route)\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\)", stmts[-1], re.S)
+        if rr:
+            return ("routeredir", _unquote(rr.group(1)))
         rd = re.fullmatch(r"return\s+redirect\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\)(?:\s*->\s*to\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*\))?", stmts[-1], re.S)
         if rd:
             target = rd.group(1) if rd.group(1) else rd.group(2)
@@ -443,12 +446,17 @@ def _leaf_rs(tr) -> str:
 
 def routes(root: str) -> list:
     """[(METHOD, path, params, translation-or-None, source-file)]"""
-    out = []
+    out, names = [], {}
     for rel, prefix in (("routes/web.php", ""), ("routes/api.php", "/api")):
         p = os.path.join(root, rel)
         if not os.path.exists(p):
             continue
         t = _strip_comments(open(p, encoding="utf-8", errors="replace").read())
+        starts = [(m.start(), (prefix + "/" + m.group(3).strip("/")).rstrip("/") or "/") for m in _ROUTE.finditer(t)]
+        for nm in re.finditer(r"->\s*name\(\s*(['\"])([\w.-]+)\1\s*\)", t):
+            prev = [pth for st, pth in starts if st < nm.start()]
+            if prev:
+                names.setdefault(nm.group(2), prev[-1])
         for m in _ROUTE.finditer(t):
             meth, path = m.group(1).upper(), m.group(3)
             full = (prefix + "/" + path.strip("/")).rstrip("/") or "/"
@@ -465,7 +473,23 @@ def routes(root: str) -> list:
             tr = translate(body, params) if body is not None else None
             for mm in (["GET", "POST", "PUT", "DELETE"] if meth == "ANY" else [meth]):
                 out.append((mm, full, params, tr, src))
-    return out
+    return [(a, b, c, _resolve_names(tr, names), e) for a, b, c, tr, e in out]
+
+
+def _resolve_names(tr, names):
+    """('routeredir', name) -> ('redirect', path) for named routes without parameters; else None (501)."""
+    if tr is None:
+        return None
+    if tr[0] == "routeredir":
+        path = names.get(tr[1])
+        return ("redirect", path) if path and "{" not in path else None
+    if tr[0] in ("if", "ifhas"):
+        a, b = _resolve_names(tr[4], names), _resolve_names(tr[5], names)
+        return None if a is None or b is None else tr[:4] + (a, b)
+    if tr[0] == "ifcond":
+        a, b = _resolve_names(tr[2], names), _resolve_names(tr[3], names)
+        return None if a is None or b is None else (tr[0], tr[1], a, b)
+    return tr
 
 
 def _rs_str(s: str) -> str:

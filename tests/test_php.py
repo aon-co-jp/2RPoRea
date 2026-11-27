@@ -597,3 +597,12 @@ def test_view_loop_depth_parent(tmp_path):
     (tmp_path / "resources/views/d.blade.php").write_text("@foreach($rs as $r)@foreach($cs as $c){{ $loop->depth }}{{ $loop->parent->iteration }}@endforeach{{ $loop->depth }};@endforeach", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/d"] == ("text", [("lit", "211;221;")])
+
+
+def test_view_continue_break(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/c', 'c', ['xs' => ['a', 'b', 'c', 'd']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/c.blade.php").write_text("@foreach($xs as $x)@continue($x == 'b'){{ $x }}@break($x == 'c')@endforeach", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/c"] == ("text", [("lit", "ac")])

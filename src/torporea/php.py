@@ -742,7 +742,35 @@ def routes(root: str) -> list:
                                 b = re.sub(r"\{\{\s*\$" + kk + r"\s*\}\}", lambda _m: _h.escape(keys[i]), b)
                             b = re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", lambda _m: _h.escape(x), b)
                             return re.sub(r"\{!!\s*\$" + v + r"\s*!!\}", lambda _m: x, b)
-                        return "".join(_one(i, x) for i, x in enumerate(xs))
+                        # @continue / @break, bare or with ($v == 'lit' / != / $loop->first|last|odd|even): cut the iteration there.
+                        def _hit(cond, i, x):
+                            if cond is None:
+                                return True
+                            c = re.fullmatch(r"\s*\$(\w+)\s*(===|!==|==|!=)\s*'([^'\\]*)'\s*", cond)
+                            if c and c.group(1) == v and isinstance(x, str):
+                                return (x == c.group(3)) == (c.group(2) in ("==", "==="))
+                            c = re.fullmatch(r"\s*(!?)\$loop->(first|last|odd|even)\s*", cond)
+                            if c:
+                                on = {"first": i == 0, "last": i == len(xs) - 1, "odd": (i + 1) % 2 == 1, "even": (i + 1) % 2 == 0}[c.group(2)]
+                                return on != (c.group(1) == "!")
+                            raise ValueError
+                        parts = []
+                        for i, x in enumerate(xs):
+                            t = _one(i, x)
+                            stop = False
+                            for d in re.finditer(r"@(continue|break)\b(?:\s*\(([^()]*)\))?", t):
+                                try:
+                                    if not _hit(d.group(2), i, x):
+                                        continue
+                                except ValueError:
+                                    return mm.group(0)
+                                t, stop = t[:d.start()], d.group(1) == "break"
+                                break
+                            t = re.sub(r"@(continue|break)\b(?:\s*\([^()]*\))?", "", t)
+                            parts.append(t)
+                            if stop:
+                                break
+                        return "".join(parts)
                     # @forelse(...) body @empty alt @endforelse: the alt when the literal list/array is empty, else a @foreach.
                     def _forelse(mm):
                         v = data.get(mm.group(2))

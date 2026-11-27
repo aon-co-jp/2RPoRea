@@ -473,6 +473,16 @@ def routes(root: str) -> list:
             prev = [pth for st, pth in starts if st < nm.start()]
             if prev:
                 names.setdefault(nm.group(2), prev[-1])
+        for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*\)", t, re.S):
+            full = (prefix + "/" + m.group(2).strip("/")).rstrip("/") or "/"
+            vf = os.path.join(root, "resources", "views", *m.group(4).split(".")) + ".blade.php"
+            html = open(vf, encoding="utf-8").read() if os.path.exists(vf) else None
+            # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
+            if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html)):
+                html = None
+            if "{" in full:
+                continue
+            out.append(("GET", full, [], ("text", [("lit", html)]) if html is not None else None, os.path.relpath(vf, root).replace(os.sep, "/")))
         for m in re.finditer(r"Route::(redirect|permanentRedirect)\s*\(\s*(['\"])(.*?)\2\s*,\s*(['\"])(.*?)\4\s*(?:,\s*(\d{3})\s*)?\)", t, re.S):
             full = (prefix + "/" + m.group(3).strip("/")).rstrip("/") or "/"
             if "{" in full or "{" in m.group(5):

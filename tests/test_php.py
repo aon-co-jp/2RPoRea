@@ -215,3 +215,15 @@ def test_route_redirect_shortcuts(tmp_path):
     assert rs[("GET", "/here")] == ("redirect", "/there")
     assert rs[("POST", "/old")] == ("status", 301, ("redirect", "/new"))
     assert rs[("GET", "/t")] == ("status", 307, ("redirect", "/u"))
+
+
+def test_route_view_static(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views" / "pages"
+    v.mkdir(parents=True)
+    (v / "about.blade.php").write_text("<h1>About</h1>\n", encoding="utf-8")
+    (v / "dyn.blade.php").write_text("<h1>{{ $x }}</h1>\n", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::view('/about', 'pages.about');\nRoute::view('/dyn', 'pages.dyn');\n", encoding="utf-8")
+    rs = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert rs["/about"] == ("text", [("lit", "<h1>About</h1>\n")]) and rs["/dyn"] is None

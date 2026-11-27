@@ -222,3 +222,7 @@
 ## 2026-11-27 23:04 `Route::redirect` / `Route::permanentRedirect`
 **日本語**: `Route::redirect('/a', '/b'[, 307])`(既定302)と `Route::permanentRedirect('/a', '/b')`(301)を、全メソッド(GET/POST/PUT/DELETE)の転送ルートへ変換。curl実測: `/here`→`302 /there`、`/old2`→`301 /new2`。テスト38件。パラメーター付きのパスは未対応(除外)。
 **English**: `Route::redirect('/a', '/b'[, 307])` (default 302) and `Route::permanentRedirect('/a', '/b')` (301) become redirect routes for every method (GET/POST/PUT/DELETE). Measured with curl: `/here` gives `302 /there`, `/old2` gives `301 /new2`. 38 tests. Paths with parameters are skipped.
+
+## 2026-11-27 23:06 `Route::view` (静的ビューのみ / static views only)
+**日本語**: `Route::view('/about', 'pages.about')` を `resources/views/pages/about.blade.php` の内容を返すGETルートへ変換。Blade構文(`{{ }}`・`{!! !!}`・`@ディレクティブ`)を含むビューは501(TODO)のまま。curl実測: `/about`→HTML、`/dyn`→501。テスト39件。
+**English**: `Route::view('/about', 'pages.about')` becomes a GET route returning `resources/views/pages/about.blade.php`. Views with Blade syntax (`{{ }}`, `{!! !!}`, `@directives`) stay 501 (TODO). Measured with curl: `/about` returns the HTML, `/dyn` returns 501. 39 tests.

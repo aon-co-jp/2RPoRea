@@ -708,15 +708,18 @@ def routes(root: str) -> list:
                     # @while($i < N) ... @php($i++) ... @endwhile with an integer $i set by @php: unrolled (capped at 1000).
                     def _while(q):
                         v, op, n, body = q.group(1), q.group(2), int(q.group(3)), q.group(4)
-                        steps = re.findall(r"@php\s*\(\s*\$" + v + r"\s*(\+\+|--)\s*\)", body)
+                        steps = re.findall(r"@php\s*\(\s*\$" + v + r"\s*(\+\+|--|\+=\s*\d+|-=\s*\d+)\s*\)", body)
                         if len(steps) != 1 or not re.fullmatch(r"-?\d+", data.get(v, "") if isinstance(data.get(v), str) else ""):
                             return q.group(0)
-                        i, d, out = int(data[v]), (1 if steps[0] == "++" else -1), []
+                        st = steps[0].replace(" ", "")
+                        i, d, out = int(data[v]), (1 if st == "++" else -1 if st == "--" else int(st[2:]) * (1 if st[0] == "+" else -1)), []
+                        if d == 0:
+                            return q.group(0)
                         test = {"<": lambda a: a < n, "<=": lambda a: a <= n, ">": lambda a: a > n, ">=": lambda a: a >= n, "!=": lambda a: a != n}[op]
                         while test(i):
                             if len(out) >= 1000:
                                 return q.group(0)
-                            pre, post = re.split(r"@php\s*\(\s*\$" + v + r"\s*(?:\+\+|--)\s*\)", body)
+                            pre, post = re.split(r"@php\s*\(\s*\$" + v + r"\s*(?:\+\+|--|\+=\s*\d+|-=\s*\d+)\s*\)", body)
                             out.append(re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", str(i), pre) + re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", str(i + d), post))
                             i += d
                         data[v] = str(i)

@@ -669,3 +669,12 @@ def test_view_while_bounds_from_data(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("@php($i = 0)@while($i < count($xs)){{ $i }}@php($i++)@endwhile|@php($j = 0)@while($j <= $n){{ $j }}@php($j++)@endwhile", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "012|012")])
+
+
+def test_view_while_steps(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g');\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("@php($i = 0)@while($i < 7){{ $i }},@php($i += 3)@endwhile|@php($j = 6)@while($j > 0){{ $j }}@php($j -= 2)@endwhile", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "0,3,6,|642")])

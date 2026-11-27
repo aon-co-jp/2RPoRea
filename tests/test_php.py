@@ -868,5 +868,6 @@ def test_request_validate_simple_rules(tmp_path):
 def test_back_with_flash_and_session():
     from torporea import php
     tr = php.translate("return back()->with('status', 'Saved');", [])
-    assert tr == ("backw", "status", "Saved")
+    assert tr == ("backw", "status", "Saved", None)
+    assert php.translate("return redirect('/home')->with('k', 'v');", [])[3] == "/home"
     assert "rporea_flash" in php._leaf_rs(tr)

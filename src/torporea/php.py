@@ -482,9 +482,10 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
-        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*'([^'\\]*)'\s*\)", stmts[-1], re.S)
+        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*'([^'\\]*)'\s*\)", stmts[-1], re.S)
         if bw:
-            return ("backw", bw.group(1), bw.group(2))
+            # redirect('/path')->with(...) goes to the literal path; back() to the Referer.
+            return ("backw", bw.group(2), bw.group(3), bw.group(1))
         bx = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))((?:\s*->\s*with(?:Input|Errors)\((?:[^()]|\([^()]*\))*\))+)", stmts[-1], re.S)
         if bx and "withErrors" in bx.group(1):
             # withErrors(['k' => 'msg', ...]) with literal messages: flashed in the rporea_err cookie for @error / $errors->first().
@@ -575,7 +576,7 @@ def _leaf_rs(tr) -> str:
     if tr[0] == "status":
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
     if tr[0] == "backw":
-        return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_flash\", %s).parse().unwrap()); r }" % _rs_str(json.dumps({tr[1]: tr[2]}, ensure_ascii=False))
+        return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", %s); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_flash\", %s).parse().unwrap()); r }" % ("%s.parse().unwrap()" % _rs_str(tr[3]) if tr[3] else "back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())", _rs_str(json.dumps({tr[1]: tr[2]}, ensure_ascii=False)))
     if tr[0] == "valid":
         arr = ", ".join("(%s, &[%s][..])" % (_rs_str(k), ", ".join(_rs_str(r) for r in rs)) for k, rs in tr[1])
         back = "let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); let kept: std::collections::HashMap<String, serde_json::Value> = input.iter().filter(|(k, _)| !matches!(k.as_str(), \"password\" | \"password_confirmation\" | \"current_password\")).map(|(k, v)| (k.clone(), v.clone())).collect(); r.headers_mut().append(\"set-cookie\", flash_old_cookie(&kept).parse().unwrap()); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_err\", &serde_json::to_string(&errs).unwrap_or_default()).parse().unwrap()); r"

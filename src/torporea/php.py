@@ -163,13 +163,40 @@ class _P:
             self.take()
             return ("json", float(v) if "." in v else int(v))
         if k == "word" and v == "response":
-            self.take(); self.take("("); self.take(")")
+            self.take(); self.take("(")
+            if self.peek()[1] != ")":
+                body = self.value()
+                code = 200
+                if self.peek()[1] == ",":
+                    self.take(",")
+                    kc, vc = self.take()
+                    if kc != "num":
+                        raise _Unsupported("non-literal status")
+                    code = int(vc)
+                self.take(")")
+                if body[0] not in ("text", "json") or (body[0] == "json" and not isinstance(body[1], str)):
+                    raise _Unsupported("response() body")
+                if body[0] == "json":
+                    body = ("text", [("lit", body[1])])
+                return ("status", code, body) if code != 200 else body
+            self.take(")")
             self.take("->"); k2, v2 = self.take()
             if v2 != "json":
                 raise _Unsupported("response()->" + v2)
             self.take("(")
             inner = self.value()
+            code = 200
+            if self.peek()[1] == ",":
+                self.take(",")
+                kc, vc = self.take()
+                if kc != "num":
+                    raise _Unsupported("non-literal status")
+                code = int(vc)
             self.take(")")
+            if code != 200:
+                if inner[0] not in ("json", "input_all"):
+                    raise _Unsupported("json of non-literal")
+                return ("status", code, inner)
             if inner[0] == "input_all":
                 return inner
             if inner[0] != "json":
@@ -363,6 +390,8 @@ def _has_rs(kind: str, key: str) -> str:
 
 
 def _leaf_rs(tr) -> str:
+    if tr[0] == "status":
+        return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
     if tr[0] == "back":
         return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r }"
     if tr[0] == "redirect":
@@ -483,6 +512,8 @@ def _uses_input(tr) -> bool:
         return True
     if tr[0] == "ifcond":
         return True
+    if tr[0] == "status":
+        return _uses_input(tr[2])
     return tr[0] == "input_all" or (tr[0] == "text" and any(k == "query" for k, _ in tr[1]))
 
 

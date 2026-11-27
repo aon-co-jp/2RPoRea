@@ -194,3 +194,7 @@
 ## 2026-11-27 23:40 `back()` / `redirect()->back()`
 **日本語**: `return back();`・`return redirect()->back();` を、`Referer` の先へ302(無ければ `/`)に変換。入力を読む処理より先に `Referer` を控える。curl実測: 空送信→`302` で元のページ、値あり→`saved`。テスト32件。Laravelのセッション経由の入力引き継ぎ(`withInput`)は未対応。
 **English**: `return back();` and `return redirect()->back();` now 302 to the `Referer` (or `/` when absent); the referer is captured before the input is read. Measured with curl: empty submit gives `302` back to the page, a value gives `saved`. 32 tests. Laravel's session-based input flashing (`withInput`) is not supported.
+
+## 2026-11-27 22:50 `response('text', code)` / `response()->json(..., code)`
+**日本語**: 状態コードつきの `response('本文', 201)`・`response()->json([...], 201)`(`$request->all()` 等も可)を変換。curl実測: `/mk`→`{"ok":true} [201]`、`/gone`→`Gone away [410]`。テスト33件。状態コードは数値リテラルのみ、ヘッダー指定(第3引数・`->header()`)は未対応(501)。
+**English**: `response('body', 201)` and `response()->json([...], 201)` (also with `$request->all()` etc.) are now converted with their status code. Measured with curl: `/mk` gives `{"ok":true} [201]`, `/gone` gives `Gone away [410]`. 33 tests. Status codes must be numeric literals; headers (third argument, `->header()`) are not supported (501).

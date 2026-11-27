@@ -159,3 +159,11 @@ def test_back():
     t = translate("if (!$request->filled('t')) { return back(); } return 'ok';", [])
     s = render_main([("POST", "/s", [], t, "routes/web.php")])
     assert s.index("let back_referer") < s.index("let input = read_input")
+
+
+def test_response_status():
+    assert translate("return response('Created', 201);", []) == ("status", 201, ("text", [("lit", "Created")]))
+    assert translate("return response()->json(['ok' => true], 201);", []) == ("status", 201, ("json", {"ok": True}))
+    assert translate("return response('x');", []) == ("text", [("lit", "x")])
+    s = render_main([("GET", "/g", [], ("status", 410, ("text", [("lit", "g")])), "routes/web.php")])
+    assert "StatusCode::from_u16(410)" in s

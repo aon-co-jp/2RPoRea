@@ -628,6 +628,25 @@ def routes(root: str) -> list:
                             return re.sub(r"\{!!\s*\$" + v + r"\s*!!\}", lambda _m: x, b)
                         return "".join(_one(i, x) for i, x in enumerate(xs))
                     html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+\$(\w+)\s*\)(.*?)@endforeach\b", _each, html, flags=re.S)
+                    # @switch($k) @case('v') ... @break ... @default ... @endswitch with a literal scalar: picked at convert time.
+                    def _sw(mm):
+                        k = mm.group(1)
+                        if not isinstance(data.get(k), str):
+                            return mm.group(0)
+                        parts = re.split(r"@(case\s*\(\s*'([^'\\]*)'\s*\)|default)", mm.group(2))
+                        cases = [(parts[i + 1], parts[i + 2]) for i in range(1, len(parts) - 2, 3)]
+                        hit = next((i for i, (lab, _) in enumerate(cases) if lab == data[k]), None)
+                        if hit is None:
+                            hit = next((i for i, (lab, _) in enumerate(cases) if lab is None), None)
+                        if hit is None:
+                            return ""
+                        out = ""
+                        for _, body in cases[hit:]:  # fall through until @break, as PHP does
+                            if "@break" in body:
+                                return out + body.split("@break", 1)[0]
+                            out += body
+                        return out
+                    html = re.sub(r"@switch\s*\(\s*\$(\w+)\s*\)(.*?)@endswitch\b", _sw, html, flags=re.S)
                     def _blk(mm):
                         k = mm.group(2)
                         if mm.group(1) in ("if", "unless") and k not in data:

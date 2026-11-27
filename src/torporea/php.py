@@ -605,8 +605,17 @@ def routes(root: str) -> list:
                         k, v, body = mm.group(1), mm.group(2), mm.group(3)
                         if not isinstance(data.get(k), list):
                             return mm.group(0)
-                        return "".join(re.sub(r"\{!!\s*\$" + v + r"\s*!!\}", lambda _m, x=x: x,
-                                              re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", lambda _m, x=x: _h.escape(x), body)) for x in data[k])
+                        xs = data[k]
+                        def _one(i, x):
+                            # $loop->index/iteration/count/remaining/first/last, as Blade's $loop.
+                            lp = {"index": str(i), "iteration": str(i + 1), "count": str(len(xs)), "remaining": str(len(xs) - i - 1),
+                                  "first": "1" if i == 0 else "", "last": "1" if i == len(xs) - 1 else ""}
+                            b = re.sub(r"@if\s*\(\s*(!?)\$loop->(first|last)\s*\)(.*?)(?:@else(.*?))?@endif\b",
+                                       lambda q: q.group(3) if bool(lp[q.group(2)]) != (q.group(1) == "!") else (q.group(4) or ""), body, flags=re.S)
+                            b = re.sub(r"\{\{\s*\$loop->(index|iteration|count|remaining)\s*\}\}", lambda q: lp[q.group(1)], b)
+                            b = re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", lambda _m: _h.escape(x), b)
+                            return re.sub(r"\{!!\s*\$" + v + r"\s*!!\}", lambda _m: x, b)
+                        return "".join(_one(i, x) for i, x in enumerate(xs))
                     html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+\$(\w+)\s*\)(.*?)@endforeach\b", _each, html, flags=re.S)
                     def _blk(mm):
                         k = mm.group(2)

@@ -811,3 +811,15 @@ def test_back_with_input_and_old(tmp_path):
     assert r["/f"] == ("text", [("lit", '<input value="'), ("old_esc", ("name", "none")), ("lit", '">')])
     src = render_main(rts)
     assert "flash_old_cookie(&input)" in src and "old_input(&req)" in src and "Max-Age=0" in src
+
+
+def test_with_input_only_except(tmp_path):
+    from torporea.php import routes, render_main
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::post('/a', function (Request $request) { return back()->withInput($request->only(['name'])); });\nRoute::post('/b', function (Request $request) { return redirect()->back()->withInput($request->except(['pw', 'pw2'])); });\nRoute::post('/c', function (Request $request) { return back()->withInput($request->only([$k])); });\n", encoding="utf-8")
+    rts = routes(str(tmp_path))
+    r = {p: tr for _, p, _, tr, _ in rts}
+    assert r["/a"] == ("back", "input", "only", ["name"])
+    assert r["/b"] == ("back", "input", "except", ["pw", "pw2"])
+    assert r["/c"] is None
+    assert "flash_old_cookie(&picked)" in render_main(rts)

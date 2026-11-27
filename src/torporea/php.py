@@ -467,10 +467,18 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
-        bk = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))(\s*->\s*withInput\(\s*\))?", stmts[-1])
+        bk = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))(\s*->\s*withInput\(\s*(?:\$request\s*->\s*(only|except)\(\s*\[([^\]]*)\]\s*\)\s*)?\))?", stmts[-1])
         if bk:
             # withInput(): the request input is flashed to the next request in the rporea_old cookie (read by old()).
-            return ("back", "input") if bk.group(1) else ("back",)
+            # withInput($request->only([...])) / ->except([...]) flash only the chosen keys.
+            if not bk.group(1):
+                return ("back",)
+            if bk.group(2):
+                keys = [x.strip() for x in bk.group(3).split(",") if x.strip()]
+                if not all(re.fullmatch(r"'[\w.-]+'|\"[\w.-]+\"", k) for k in keys):
+                    return None
+                return ("back", "input", bk.group(2), [k[1:-1] for k in keys])
+            return ("back", "input")
         rr = re.fullmatch(r"return\s+(?:redirect\(\s*\)\s*->\s*route|to_route)\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*(?:,\s*\[([^\]]*)\])?\s*\)", stmts[-1], re.S)
         if rr:
             args = []
@@ -528,6 +536,9 @@ def _leaf_rs(tr) -> str:
         return "{ let mut r = { %s }; %s r }" % (_leaf_rs(tr[2]), sets)
     if tr[0] == "status":
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
+    if tr[0] == "back" and len(tr) > 2:
+        keep = "" if tr[2] == "only" else "!"
+        return "{ let keys: &[&str] = &[%s]; let picked: std::collections::HashMap<String, serde_json::Value> = input.iter().filter(|(k, _)| %skeys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect(); let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r.headers_mut().insert(\"set-cookie\", flash_old_cookie(&picked).parse().unwrap()); r }" % (", ".join(_rs_str(k) for k in tr[3]), keep)
     if tr[0] == "back" and len(tr) > 1:
         return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r.headers_mut().insert(\"set-cookie\", flash_old_cookie(&input).parse().unwrap()); r }"
     if tr[0] == "back":

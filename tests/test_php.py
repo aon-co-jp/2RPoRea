@@ -797,3 +797,17 @@ def test_view_elseif_plain_var(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("@if(count($xs) > 5)A@elseif($z)B@elseif($xs)C@else D@endif", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "C")])
+
+
+def test_back_with_input_and_old(tmp_path):
+    from torporea.php import routes, render_main
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::post('/p', function (Request $request) { return back()->withInput(); });\nRoute::post('/q', function () { return redirect()->back(); });\nRoute::view('/f', 'f');\n", encoding="utf-8")
+    (tmp_path / "resources/views/f.blade.php").write_text("<input value=\"{{ old('name', 'none') }}\">", encoding="utf-8")
+    rts = routes(str(tmp_path))
+    r = {p: tr for _, p, _, tr, _ in rts}
+    assert r["/p"] == ("back", "input")
+    assert r["/q"] == ("back",)
+    assert r["/f"] == ("text", [("lit", '<input value="'), ("old_esc", ("name", "none")), ("lit", '">')])
+    src = render_main(rts)
+    assert "flash_old_cookie(&input)" in src and "old_input(&req)" in src and "Max-Age=0" in src

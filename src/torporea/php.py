@@ -467,8 +467,10 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
-        if re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))", stmts[-1]):
-            return ("back",)
+        bk = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))(\s*->\s*withInput\(\s*\))?", stmts[-1])
+        if bk:
+            # withInput(): the request input is flashed to the next request in the rporea_old cookie (read by old()).
+            return ("back", "input") if bk.group(1) else ("back",)
         rr = re.fullmatch(r"return\s+(?:redirect\(\s*\)\s*->\s*route|to_route)\(\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\s*(?:,\s*\[([^\]]*)\])?\s*\)", stmts[-1], re.S)
         if rr:
             args = []
@@ -526,6 +528,8 @@ def _leaf_rs(tr) -> str:
         return "{ let mut r = { %s }; %s r }" % (_leaf_rs(tr[2]), sets)
     if tr[0] == "status":
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
+    if tr[0] == "back" and len(tr) > 1:
+        return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r.headers_mut().insert(\"set-cookie\", flash_old_cookie(&input).parse().unwrap()); r }"
     if tr[0] == "back":
         return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); r }"
     if tr[0] == "redirectp":
@@ -567,7 +571,14 @@ def _leaf_rs(tr) -> str:
         if k == "query_esc":
             return "s.push_str(&input.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string()).replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\"));" % (_rs_str(v[0]), _rs_str(v[1]))
         return "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(v)
-    pieces = [piece(k, v) for k, v in tr[1]]
+    def piece_old(k, v):
+        if k == "old_esc":
+            return "s.push_str(&old.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string()).replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\"));" % (_rs_str(v[0]), _rs_str(v[1]))
+        return piece(k, v)
+    pieces = [piece_old(k, v) for k, v in tr[1]]
+    if any(k == "old_esc" for k, _ in tr[1]):
+        # old(): read the flashed input once, then expire the cookie (Laravel flash data lives for one request).
+        return "{ let old = old_input(&req); let mut s = String::new(); %s let mut r = hyper_compat::html_response(StatusCode::OK, s); r.headers_mut().insert(\"set-cookie\", \"rporea_old=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax\".parse().unwrap()); r }" % " ".join(pieces)
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
 
 
@@ -932,7 +943,7 @@ def routes(root: str) -> list:
                             return mm.group(0)
                         t0 = mm.group(0)
                         if "@elseif" in t0:
-                            if mm.group(1) != "if" or not re.fullmatch(r"(?:(?!@if).)*", t0[3:], re.S):
+                            if mm.group(1) != "if" or not re.fullmatch(r"(?:(?!@if\b).)*", t0[3:], re.S):
                                 return t0
                             ok = bool(data[k]) if isinstance(data[k], list) else data[k] not in ("", "0")
                             pos = t0.index("@elseif")
@@ -1340,6 +1351,10 @@ def routes(root: str) -> list:
                     rq.append((q.group(2), q.group(4) or ""))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*request\(\s*(['\"])(\w+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _rq, html)
+                def _old(q):
+                    rq.append(("old_esc", (q.group(2), q.group(4) or "")))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"\{\{\s*old\(\s*(['\"])(\w+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _old, html)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None
@@ -1352,7 +1367,8 @@ def routes(root: str) -> list:
                 tparts = []
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
-                        tparts.append(("query_esc", rq[int(seg)]))
+                        e = rq[int(seg)]
+                        tparts.append(e if e[0] == "old_esc" else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])
@@ -1471,6 +1487,26 @@ fn php_loose_eq(v: Option<&serde_json::Value>, lit: &str) -> bool {
     }
 }
 
+/// Laravel `withInput()`: the input as percent-encoded JSON in a short-lived cookie (capped at 3 KiB; larger input is not flashed).
+fn flash_old_cookie(input: &std::collections::HashMap<String, serde_json::Value>) -> String {
+    let json = serde_json::to_string(input).unwrap_or_default();
+    let mut v = String::new();
+    for b in json.bytes() {
+        if b.is_ascii_alphanumeric() || b"-._~".contains(&b) { v.push(b as char) } else { v.push_str(&format!("%{:02X}", b)) }
+    }
+    if v.len() > 3072 { v.clear(); }
+    format!("rporea_old={v}; Path=/; Max-Age=300; HttpOnly; SameSite=Lax")
+}
+
+/// Laravel `old()`: the input flashed by `withInput()` on the previous request.
+fn old_input(req: &Request) -> serde_json::Map<String, serde_json::Value> {
+    let raw = req.headers().get_all("cookie").iter().filter_map(|h| h.to_str().ok()).flat_map(|h| h.split(';')).find_map(|c| c.trim().strip_prefix("rporea_old=").map(|v| v.to_string()));
+    match raw.and_then(|v| serde_json::from_str::<serde_json::Value>(&form_decode(&v)).ok()) {
+        Some(serde_json::Value::Object(m)) => m,
+        _ => serde_json::Map::new(),
+    }
+}
+
 fn form_decode(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
@@ -1503,6 +1539,8 @@ def _uses_input(tr) -> bool:
         return True
     if tr[0] == "status":
         return _uses_input(tr[2])
+    if tr[0] == "back":
+        return len(tr) > 1
     if tr[0] == "hdr":
         return _uses_input(tr[2])
     return tr[0] == "input_all" or (tr[0] == "text" and any(k in ("query", "query_esc") for k, _ in tr[1]))

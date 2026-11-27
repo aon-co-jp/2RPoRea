@@ -106,3 +106,4 @@
 - 2026-11-28 @elseif の比較式に対応 / comparisons in @elseif (99 tests, /ez measured).
 - 2026-11-28 単純な @if($k) と @elseif の不具合を修正 / fixed plain @if($k) with @elseif (100 tests, /pz measured).
 - 2026-11-28 単純な変数の @elseif に対応 / plain-variable @elseif (101 tests, /vz measured).
+- 2026-11-28 withInput() と old() に対応(クッキーで1回だけ受け渡し) / withInput() and old() via a one-request cookie (102 tests, /ozp and /oz measured).

@@ -570,3 +570,12 @@ def test_view_forelse(tmp_path):
     (tmp_path / "resources/views/f.blade.php").write_text("@forelse($xs as $x){{ $x }}@empty-@endforelse|@forelse($ys as $y){{ $y }}@empty-@endforelse", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/f"] == ("text", [("lit", "a|-")])
+
+
+def test_view_loop_odd_even(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/o', 'o', ['xs' => ['a', 'b', 'c']]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/o.blade.php").write_text("@foreach($xs as $x)@if($loop->odd)O@else{{ '' }}E@endif@endforeach".replace("{{ '' }}", ""), encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/o"] == ("text", [("lit", "OEO")])

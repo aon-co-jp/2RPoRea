@@ -729,8 +729,9 @@ def routes(root: str) -> list:
                         def _one(i, x):
                             # $loop->index/iteration/count/remaining/first/last, as Blade's $loop.
                             lp = {"index": str(i), "iteration": str(i + 1), "count": str(len(xs)), "remaining": str(len(xs) - i - 1),
-                                  "first": "1" if i == 0 else "", "last": "1" if i == len(xs) - 1 else ""}
-                            b = re.sub(r"@if\s*\(\s*(!?)\$loop->(first|last)\s*\)(.*?)(?:@else(.*?))?@endif\b",
+                                  "first": "1" if i == 0 else "", "last": "1" if i == len(xs) - 1 else "",
+                                  "odd": "1" if (i + 1) % 2 else "", "even": "" if (i + 1) % 2 else "1"}
+                            b = re.sub(r"@if\s*\(\s*(!?)\$loop->(first|last|odd|even)\s*\)(.*?)(?:@else(.*?))?@endif\b",
                                        lambda q: q.group(3) if bool(lp[q.group(2)]) != (q.group(1) == "!") else (q.group(4) or ""), body, flags=re.S)
                             b = re.sub(r"\{\{\s*\$loop->(index|iteration|count|remaining)\s*\}\}", lambda q: lp[q.group(1)], b)
                             if kk:

@@ -561,3 +561,12 @@ def test_view_foreach_key_value(tmp_path):
     (tmp_path / "resources/views/f.blade.php").write_text("@foreach($u as $k => $v){{ $k }}={{ $v }};@endforeach@foreach($xs as $i => $x){{ $i }}{{ $x }}@endforeach", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/f"] == ("text", [("lit", "a=x;b=&lt;y&gt;;0p1q")])
+
+
+def test_view_forelse(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/f', 'f', ['xs' => ['a'], 'ys' => []]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/f.blade.php").write_text("@forelse($xs as $x){{ $x }}@empty-@endforelse|@forelse($ys as $y){{ $y }}@empty-@endforelse", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/f"] == ("text", [("lit", "a|-")])

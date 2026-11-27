@@ -738,6 +738,13 @@ def routes(root: str) -> list:
                             b = re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", lambda _m: _h.escape(x), b)
                             return re.sub(r"\{!!\s*\$" + v + r"\s*!!\}", lambda _m: x, b)
                         return "".join(_one(i, x) for i, x in enumerate(xs))
+                    # @forelse(...) body @empty alt @endforelse: the alt when the literal list/array is empty, else a @foreach.
+                    def _forelse(mm):
+                        v = data.get(mm.group(2))
+                        if not isinstance(v, (list, dict)):
+                            return mm.group(0)
+                        return mm.group(4) if not v else "@foreach(" + mm.group(1) + ")" + mm.group(3) + "@endforeach"
+                    html = re.sub(r"@forelse\s*\(\s*(\$(\w+)\s+as\s+[^)]*)\)(.*?)@empty\b(.*?)@endforelse\b", _forelse, html, flags=re.S)
                     html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+(?:\$(\w+)\s*=>\s*)?\$(\w+)\s*\)(.*?)@endforeach\b", _each, html, flags=re.S)
                     # @switch($k) @case('v') ... @break ... @default ... @endswitch with a literal scalar: picked at convert time.
                     def _sw(mm):

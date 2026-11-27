@@ -719,10 +719,13 @@ def routes(root: str) -> list:
                     # (PHP truthiness of a string: '' and '0' are false). Unknown keys keep the block (stays 501).
                     # @foreach($list as $v) ... @endforeach over a literal list: unrolled at convert time.
                     def _each(mm):
-                        k, v, body = mm.group(1), mm.group(2), mm.group(3)
-                        if not isinstance(data.get(k), list):
+                        k, kk, v, body = mm.group(1), mm.group(2), mm.group(3), mm.group(4)
+                        if isinstance(data.get(k), dict):
+                            keys, xs = list(data[k].keys()), list(data[k].values())
+                        elif isinstance(data.get(k), list):
+                            keys, xs = [str(i) for i in range(len(data[k]))], data[k]
+                        else:
                             return mm.group(0)
-                        xs = data[k]
                         def _one(i, x):
                             # $loop->index/iteration/count/remaining/first/last, as Blade's $loop.
                             lp = {"index": str(i), "iteration": str(i + 1), "count": str(len(xs)), "remaining": str(len(xs) - i - 1),
@@ -730,10 +733,12 @@ def routes(root: str) -> list:
                             b = re.sub(r"@if\s*\(\s*(!?)\$loop->(first|last)\s*\)(.*?)(?:@else(.*?))?@endif\b",
                                        lambda q: q.group(3) if bool(lp[q.group(2)]) != (q.group(1) == "!") else (q.group(4) or ""), body, flags=re.S)
                             b = re.sub(r"\{\{\s*\$loop->(index|iteration|count|remaining)\s*\}\}", lambda q: lp[q.group(1)], b)
+                            if kk:
+                                b = re.sub(r"\{\{\s*\$" + kk + r"\s*\}\}", lambda _m: _h.escape(keys[i]), b)
                             b = re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", lambda _m: _h.escape(x), b)
                             return re.sub(r"\{!!\s*\$" + v + r"\s*!!\}", lambda _m: x, b)
                         return "".join(_one(i, x) for i, x in enumerate(xs))
-                    html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+\$(\w+)\s*\)(.*?)@endforeach\b", _each, html, flags=re.S)
+                    html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+(?:\$(\w+)\s*=>\s*)?\$(\w+)\s*\)(.*?)@endforeach\b", _each, html, flags=re.S)
                     # @switch($k) @case('v') ... @break ... @default ... @endswitch with a literal scalar: picked at convert time.
                     def _sw(mm):
                         k = mm.group(1)

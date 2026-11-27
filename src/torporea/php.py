@@ -584,7 +584,7 @@ def routes(root: str) -> list:
             prev = [pth for st, pth in starts if st < nm.start()]
             if prev:
                 names.setdefault(nm.group(2), prev[-1])
-        for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*(?:,\s*\[((?:[^\[\]]|\[[^\[\]]*\])*)\])?\s*\)", t, re.S):
+        for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*(?:,\s*\[((?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*)\])?\s*\)", t, re.S):
             full = (prefix + "/" + m.group(2).strip("/")).rstrip("/") or "/"
             vf = os.path.join(root, "resources", "views", *m.group(4).split(".")) + ".blade.php"
             html = open(vf, encoding="utf-8").read() if os.path.exists(vf) else None
@@ -610,15 +610,13 @@ def routes(root: str) -> list:
                 import html as _h
                 # 'key' => 'value' or 'key' => ['a', 'b'] (a list of literal strings, for @foreach).
                 rest = (m.group(5) or "").strip().rstrip(",").strip()
-                item = re.compile(r"\s*'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\[\s*((?:'[^'\\]*'\s*,?\s*)*)\]|\[\s*((?:'\w+'\s*=>\s*'[^'\\]*'\s*,?\s*)+)\])\s*(?:,|$)")
-                pos = 0
-                while pos < len(rest):
-                    mm = item.match(rest, pos)
-                    if not mm or mm.end() == pos:
-                        html = None
-                        break
-                    data[mm.group(1)] = mm.group(2) if mm.group(2) is not None else (re.findall(r"'([^'\\]*)'", mm.group(3)) if mm.group(3) is not None else dict(re.findall(r"'(\w+)'\s*=>\s*'([^'\\]*)'", mm.group(4))))
-                    pos = mm.end()
+                parsed = _php_array("[" + rest + "]") if rest else {}
+                if isinstance(parsed, list) and not parsed:
+                    parsed = {}
+                if not isinstance(parsed, dict):
+                    html = None
+                else:
+                    data.update(parsed)
                 # @php($x = 'v') and @php $x = 'v'; ... @endphp with only literal string assignments set view data.
                 def _php(code):
                     for st in [x.strip() for x in code.split(";") if x.strip()]:
@@ -738,6 +736,11 @@ def routes(root: str) -> list:
                             b = re.sub(r"\{\{\s*\$loop->(index|iteration|count|remaining|depth)\s*\}\}", lambda q: lp[q.group(1)], b)
                             # $loop->parent->X refers to the enclosing loop, which is unrolled later: hand it over as $loop->X.
                             b = b.replace("$loop->parent->", "$loop->")
+                            if not isinstance(x, str):
+                                # an array item: name it as hidden view data so inner loops / $v['k'] over it resolve later.
+                                hid = "__fe%d" % len(data)
+                                data[hid] = x
+                                b = re.sub(r"\$" + v + r"(?!\w)", "$" + hid, b)
                             if kk:
                                 b = re.sub(r"\{\{\s*\$" + kk + r"\s*\}\}", lambda _m: _h.escape(keys[i]), b)
                             b = re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", lambda _m: _h.escape(x), b)
@@ -783,7 +786,29 @@ def routes(root: str) -> list:
                         prev = html
                         html = re.sub(r"@foreach\s*\(\s*\$(\w+)\s+as\s+(?:\$(\w+)\s*=>\s*)?\$(\w+)\s*\)((?:(?!@foreach\b).)*?)@endforeach\b", _each, html, flags=re.S)
                         if html == prev:
-                            break
+                            # outer loops over arrays of arrays: unroll the outermost one first (only without $loop / @continue / @break inside).
+                            for hm in re.finditer(r"@foreach\s*\(\s*\$(\w+)\s+as\s+(?:\$(\w+)\s*=>\s*)?\$(\w+)\s*\)", html):
+                                if not isinstance(data.get(hm.group(1)), (list, dict)):
+                                    continue
+                                lvl, end = 1, None
+                                for tm in re.finditer(r"@(end)?foreach\b", html[hm.end():]):
+                                    lvl += -1 if tm.group(1) else 1
+                                    if lvl == 0:
+                                        end = (hm.end() + tm.start(), hm.end() + tm.end())
+                                        break
+                                inner = html[hm.end():end[0]] if end else ""
+                                if not end or "$loop" in inner or re.search(r"@(continue|break)\b", inner):
+                                    continue
+                                class _M:
+                                    string = html
+                                    def start(self):
+                                        return hm.start()
+                                    def group(self, n):
+                                        return {0: html[hm.start():end[1]], 1: hm.group(1), 2: hm.group(2), 3: hm.group(3), 4: inner}[n]
+                                html = html[:hm.start()] + _each(_M()) + html[end[1]:]
+                                break
+                            if html == prev:
+                                break
                     # @switch($k) @case('v') ... @break ... @default ... @endswitch with a literal scalar: picked at convert time.
                     def _sw(mm):
                         k = mm.group(1)
@@ -1255,3 +1280,68 @@ def _int_expr(src, data):
             return None
         return format(r, ".14g")
     return str(r)
+
+
+def _php_array(src):
+    """Parse a PHP array literal of single-quoted strings, nested lists and 'key' => value pairs.
+
+    Returns a list (no keys) or a dict (all keys given), or None when anything else appears."""
+    pos = [0]
+
+    def ws():
+        while pos[0] < len(src) and src[pos[0]].isspace():
+            pos[0] += 1
+
+    def string():
+        m = re.compile(r"'([^'\\]*)'").match(src, pos[0])
+        if not m:
+            return None
+        pos[0] = m.end()
+        return m.group(1)
+
+    def value():
+        ws()
+        if src.startswith("[", pos[0]):
+            return array()
+        return string()
+
+    def array():
+        pos[0] += 1
+        items, keys = [], []
+        while True:
+            ws()
+            if src.startswith("]", pos[0]):
+                pos[0] += 1
+                break
+            v = value()
+            if v is None:
+                return None
+            ws()
+            if src.startswith("=>", pos[0]):
+                if not isinstance(v, str):
+                    return None
+                pos[0] += 2
+                k, v = v, value()
+                if v is None:
+                    return None
+                keys.append(k)
+            else:
+                keys.append(None)
+            items.append(v)
+            ws()
+            if src.startswith(",", pos[0]):
+                pos[0] += 1
+            elif not src.startswith("]", pos[0]):
+                return None
+        if all(k is None for k in keys):
+            return items
+        if any(k is None for k in keys):
+            return None
+        return dict(zip(keys, items))
+
+    ws()
+    if not src.startswith("[", pos[0]):
+        return None
+    r = array()
+    ws()
+    return r if pos[0] == len(src) else None

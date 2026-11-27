@@ -615,3 +615,12 @@ def test_view_nested_arrays(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("@foreach($grid as $row)@foreach($row as $c){{ $c }}@endforeach;@endforeach@foreach($us as $u){{ $u['n'] }}@endforeach", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "12;3;A&lt;B&gt;")])
+
+
+def test_view_outer_loop_with_loop_vars(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['grid' => [['a', 'b'], ['c']]]);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("@foreach($grid as $row){{ $loop->iteration }}:@foreach($row as $c){{ $loop->parent->index }}.{{ $loop->index }}{{ $c }}@if($loop->last)!@endif @endforeach|@endforeach", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "1:0.0a 0.1b! |2:1.0c! |")])

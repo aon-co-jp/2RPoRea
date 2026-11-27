@@ -727,15 +727,41 @@ def routes(root: str) -> list:
                         pre = mm.string[:mm.start()]
                         depth = len(re.findall(r"@foreach\b", pre)) - len(re.findall(r"@endforeach\b", pre)) + 1
                         def _one(i, x):
+                            # nested @foreach blocks (outer-first unrolling) keep their own $loop; only $loop->parent-> is ours there.
+                            segs, last, lvl, st0 = [], 0, 0, 0
+                            for tm in re.finditer(r"@(end)?foreach\b", body):
+                                if not tm.group(1):
+                                    if lvl == 0:
+                                        st0 = tm.start()
+                                    lvl += 1
+                                else:
+                                    lvl -= 1
+                                    if lvl == 0:
+                                        segs.append((last, st0, tm.end()))
+                                        last = tm.end()
+                            if segs:
+                                lp0 = {"index": str(i), "iteration": str(i + 1), "count": str(len(xs)), "remaining": str(len(xs) - i - 1), "depth": str(depth)}
+                                out = []
+                                for s0, s1, s2 in segs:
+                                    out.append(_one_flat(i, x, body[s0:s1]))
+                                    inn = re.sub(r"\{\{\s*\$loop->parent->(index|iteration|count|remaining|depth)\s*\}\}", lambda q: lp0[q.group(1)], body[s1:s2])
+                                    if "$loop->parent" in inn:
+                                        raise ValueError
+                                    out.append(_one_flat(i, x, inn, keep_loop=True))
+                                out.append(_one_flat(i, x, body[last:]))
+                                return "".join(out)
+                            return _one_flat(i, x, body)
+                        def _one_flat(i, x, body, keep_loop=False):
                             # $loop->index/iteration/count/remaining/first/last, as Blade's $loop.
                             lp = {"index": str(i), "iteration": str(i + 1), "count": str(len(xs)), "remaining": str(len(xs) - i - 1),
                                   "first": "1" if i == 0 else "", "last": "1" if i == len(xs) - 1 else "",
                                   "odd": "1" if (i + 1) % 2 else "", "even": "" if (i + 1) % 2 else "1", "depth": str(depth)}
-                            b = re.sub(r"@if\s*\(\s*(!?)\$loop->(first|last|odd|even)\s*\)(.*?)(?:@else(.*?))?@endif\b",
+                            b = body if keep_loop else re.sub(r"@if\s*\(\s*(!?)\$loop->(first|last|odd|even)\s*\)(.*?)(?:@else(.*?))?@endif\b",
                                        lambda q: q.group(3) if bool(lp[q.group(2)]) != (q.group(1) == "!") else (q.group(4) or ""), body, flags=re.S)
-                            b = re.sub(r"\{\{\s*\$loop->(index|iteration|count|remaining|depth)\s*\}\}", lambda q: lp[q.group(1)], b)
-                            # $loop->parent->X refers to the enclosing loop, which is unrolled later: hand it over as $loop->X.
-                            b = b.replace("$loop->parent->", "$loop->")
+                            if not keep_loop:
+                                b = re.sub(r"\{\{\s*\$loop->(index|iteration|count|remaining|depth)\s*\}\}", lambda q: lp[q.group(1)], b)
+                                # $loop->parent->X refers to the enclosing loop, which is unrolled later: hand it over as $loop->X.
+                                b = b.replace("$loop->parent->", "$loop->")
                             if not isinstance(x, str):
                                 # an array item: name it as hidden view data so inner loops / $v['k'] over it resolve later.
                                 hid = "__fe%d" % len(data)
@@ -759,7 +785,10 @@ def routes(root: str) -> list:
                             raise ValueError
                         parts = []
                         for i, x in enumerate(xs):
-                            t = _one(i, x)
+                            try:
+                                t = _one(i, x)
+                            except ValueError:
+                                return mm.group(0)
                             stop = False
                             for d in re.finditer(r"@(continue|break)\b(?:\s*\(([^()]*)\))?", t):
                                 try:
@@ -797,7 +826,7 @@ def routes(root: str) -> list:
                                         end = (hm.end() + tm.start(), hm.end() + tm.end())
                                         break
                                 inner = html[hm.end():end[0]] if end else ""
-                                if not end or "$loop" in inner or re.search(r"@(continue|break)\b", inner):
+                                if not end or re.search(r"@(continue|break)\b", inner):
                                     continue
                                 class _M:
                                     string = html

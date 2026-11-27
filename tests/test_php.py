@@ -362,5 +362,5 @@ def test_view_for(tmp_path):
     v = tmp_path / "resources" / "views"
     v.mkdir(parents=True)
     (v / "f.blade.php").write_text("@for($i = 1; $i <= 3; $i++)[{{ $i }}]@endfor", encoding="utf-8")
-    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f', ['n' => 'x']);\n", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f');\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/f"] == ("text", [("lit", "[1][2][3]")])

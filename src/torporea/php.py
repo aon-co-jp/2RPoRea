@@ -616,7 +616,7 @@ def routes(root: str) -> list:
                             return None
                         # RHS: literals and already-known $vars joined by '.' (concat) or by '+'/'-' (integers).
                         term = r"""'[^'\\]*'|"[^"\\$]*"|-?\d+|\$\w+"""
-                        toks = re.findall(r"\s*(" + term + r")\s*([.+-]|$)", q.group(2))
+                        toks = re.findall(r"\s*(" + term + r")\s*([.+*/%-]|$)", q.group(2))
                         if not toks or toks[-1][1] or re.sub(r"\s", "", q.group(2)) != "".join(re.sub(r"\s", "", a) + o for a, o in toks):
                             return None
                         vals = []
@@ -632,10 +632,30 @@ def routes(root: str) -> list:
                             r = vals[0]
                         elif ops == {"."}:
                             r = "".join(vals)
-                        elif ops <= {"+", "-"} and all(re.fullmatch(r"-?\d+", x) for x in vals):
-                            r = int(vals[0])
+                        elif ops <= {"+", "-", "*", "/", "%"} and all(re.fullmatch(r"-?\d+", x) for x in vals):
+                            # integer arithmetic with PHP precedence (* / % before + -); '/' only when exact
+                            # (PHP would give a float otherwise), '%' truncates toward zero like PHP.
+                            nums, sums = [int(vals[0])], []
                             for (_, o), x in zip(toks[:-1], vals[1:]):
-                                r = r + int(x) if o == "+" else r - int(x)
+                                x = int(x)
+                                if o in "*/%":
+                                    if o != "*" and x == 0:
+                                        return None
+                                    a = nums[-1]
+                                    if o == "*":
+                                        nums[-1] = a * x
+                                    elif o == "/":
+                                        if a % x:
+                                            return None
+                                        nums[-1] = a // x
+                                    else:
+                                        nums[-1] = abs(a) % abs(x) * (1 if a >= 0 else -1)
+                                else:
+                                    sums.append(o)
+                                    nums.append(x)
+                            r = nums[0]
+                            for o, x in zip(sums, nums[1:]):
+                                r = r + x if o == "+" else r - x
                             r = str(r)
                         else:
                             return None

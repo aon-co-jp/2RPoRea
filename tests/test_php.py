@@ -431,3 +431,15 @@ def test_view_fn(tmp_path):
     (v / "f.blade.php").write_text("{{ strtoupper($a) }}|{{ ucfirst($a) }}|{{ strlen($j) }}|{{ count($xs) }}", encoding="utf-8")
     (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/f', 'f', ['a' => 'ab<', 'j' => '日本', 'xs' => ['1', '2']]);\n", encoding="utf-8")
     assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/f"] == ("text", [("lit", "AB&lt;|Ab&lt;|6|2")])
+
+
+def test_view_php_muldiv(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "p.blade.php").write_text("@php $a = 2 + 3 * 4; $b = 12 / 4 - 1; $c = -7 % 3; @endphp{{ $a }},{{ $b }},{{ $c }}", encoding="utf-8")
+    (v / "q.blade.php").write_text("@php($d = 7 / 2){{ $d }}", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\nRoute::view('/q', 'q');\n", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/p"] == ("text", [("lit", "14,2,-1")])
+    assert r["/q"] is None

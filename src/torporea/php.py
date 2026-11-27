@@ -828,13 +828,16 @@ def routes(root: str) -> list:
                             import decimal
                             d = decimal.Decimal(args[0]).quantize(decimal.Decimal(1).scaleb(-args[1]), rounding=decimal.ROUND_HALF_UP)
                             r = format(float(d), ".14g")
-                        elif f == "number_format" and len(args) in (1, 2) and isinstance(args[0], str) and re.fullmatch(r"-?\d+(?:\.\d+)?", args[0]) and (len(args) == 1 or (isinstance(args[1], int) and 0 <= args[1] <= 10)):
+                        elif f == "number_format" and len(args) in (1, 2, 3, 4) and all(isinstance(x, str) for x in args[2:]) and isinstance(args[0], str) and re.fullmatch(r"-?\d+(?:\.\d+)?", args[0]) and (len(args) == 1 or (isinstance(args[1], int) and 0 <= args[1] <= 10)):
                             import decimal
-                            nd = args[1] if len(args) == 2 else 0
+                            nd = args[1] if len(args) >= 2 else 0
                             d = decimal.Decimal(args[0]).quantize(decimal.Decimal(1).scaleb(-nd), rounding=decimal.ROUND_HALF_UP)
                             r = f"{d:,.{nd}f}"
                             if r.startswith("-") and not d:
                                 r = r[1:]
+                            if len(args) > 2:
+                                dp, ts = args[2], args[3] if len(args) == 4 else ","
+                                r = r.replace(",", "\x02").replace(".", dp).replace("\x02", ts)
                         else:
                             return q.group(0)
                     except Exception:

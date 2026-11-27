@@ -871,3 +871,9 @@ def test_back_with_flash_and_session():
     assert tr == ("backw", "status", "Saved", None)
     assert php.translate("return redirect('/home')->with('k', 'v');", [])[3] == "/home"
     assert "rporea_flash" in php._leaf_rs(tr)
+
+
+def test_with_request_input():
+    from torporea import php
+    tr = php.translate("return back()->with('s', $request->input('name'));", [])
+    assert tr == ("backw", "s", ("in", "name"), None) and php._uses_input(tr)

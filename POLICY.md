@@ -115,3 +115,4 @@
 - 2026-11-28: back()->with() と session() / back()->with() and session() (see PORTING.md).
 - 2026-11-28: @if(session('k')) に対応 / @if(session('k')) supported (see PORTING.md).
 - 2026-11-28: redirect('/path')->with() / redirect('/path')->with() (see PORTING.md).
+- 2026-11-28: with() に $request->input() / with() of request input (see PORTING.md).

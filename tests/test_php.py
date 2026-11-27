@@ -861,4 +861,5 @@ def test_request_validate_simple_rules(tmp_path):
     assert "validate_field(&input" in rs and "rporea_err" in rs and "password_confirmation" in rs
     assert php._uses_input(tr)
     # unknown rules stay a 501 TODO
-    assert php.translate("$request->validate(['e' => 'email']); return 'ok';", []) is None
+    assert php.translate("$request->validate(['e' => 'email|confirmed']); return 'ok';", [])[0] == 'valid'
+    assert php.translate("$request->validate(['e' => 'unique:users']); return 'ok';", []) is None

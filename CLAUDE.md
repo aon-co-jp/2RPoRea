@@ -123,3 +123,4 @@
 - 2026-11-28 withErrors と @error・$errors->first に対応 / withErrors, @error and $errors->first (104 tests, /ozx and /oz3 measured).
 - 2026-11-28 $errors->any/has/all に対応、エラーの順番を Laravel と同じに / $errors->any/has/all, Laravel order kept (105 tests, /oz4 measured).
 - 2026-11-28: `$request->validate()` の単純な規則に対応 / simple-rule validate() supported (see PORTING.md).
+- 2026-11-28: validate() に email・confirmed / email and confirmed rules (see PORTING.md).

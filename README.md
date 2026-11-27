@@ -135,3 +135,5 @@ pip install .                      # 開発中 / under development
 ## 2026-11-28 08:13 PHP変換(ビュー)のまとめ / PHP view conversion summary
 **日本語**: `Route::view` と Blade を変換時に解決できる範囲が広がった。数値(小数・`abs`/`intval`/`floor`/`ceil`/`round`/`number_format`)、三項演算子・比較、`request('k')`(エスケープ済み)、配列の添字・連想配列・配列の配列、`@foreach`(キー、`$loop` の各値、`parent`、入れ子、外側から展開する入れ子での `$loop`、`@continue`/`@break`)、`@forelse`。どれも変換したサーバーを curl で実測済み、テスト84件成功。解決できないものは従来どおり501のTODO。未了: `withInput`(セッション層が要る)。
 **English**: More of `Route::view` and Blade is now resolved at convert time: numbers (floats, `abs`/`intval`/`floor`/`ceil`/`round`/`number_format`), ternaries and comparisons, `request('k')` (escaped), array indexes, associative and nested arrays, `@foreach` (keys, every `$loop` value, `parent`, nesting, `$loop` and `@continue`/`@break` in loops unrolled from the outside) and `@forelse`. All measured with curl against the converted server; 84 tests pass. Anything unresolved stays a 501 TODO. Open: `withInput` (needs a session layer).
+
+- 08:14 `@for` の減少・刻み(`$i--`・`+= N`・`-= N`、`>`/`>=`/`!=`)に対応、curlで実測。 / `@for` counting down and steps supported, measured with curl.

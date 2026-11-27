@@ -642,3 +642,12 @@ def test_view_outer_loop_inner_continue_break(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("@foreach($grid as $row)@foreach($row as $c)@continue($c == 'a'){{ $c }}@break@endforeach|@endforeach", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "b|c|")])
+
+
+def test_view_for_steps(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/f', 'f');\n", encoding="utf-8")
+    (tmp_path / "resources/views/f.blade.php").write_text("@for($i = 5; $i > 0; $i -= 2){{ $i }},@endfor|@for($i = 0; $i <= 6; $i += 3){{ $i }}@endfor|@for($i=3;$i>=1;$i--){{ $i }}@endfor", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/f"] == ("text", [("lit", "5,3,1,|036|321")])

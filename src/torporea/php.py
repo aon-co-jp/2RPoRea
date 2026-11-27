@@ -594,16 +594,26 @@ def routes(root: str) -> list:
                 # @{{ ... }} is Blade's escape for a literal {{ ... }} (e.g. for JS templates).
                 html = html.replace("@{{", "\x00LB\x00")
             if html is not None:
-                # @for($i = A; $i < / <= B; $i++) with integer literals: unrolled at convert time (capped at 1000).
+                # @for($i = A; $i <|<=|>|>=|!= B; $i++ / $i-- / $i += N / $i -= N) with integer literals: unrolled (capped at 1000).
                 def _for(mm):
                     v, a, op, b = mm.group(1), int(mm.group(2)), mm.group(4), int(mm.group(5))
                     if mm.group(3) != v or mm.group(6) != v:
                         return mm.group(0)
-                    rng = range(a, b + 1 if op == "<=" else b)
-                    if len(rng) > 1000:
+                    st = mm.group(7)
+                    if (st in ("+=", "-=")) != bool(mm.group(8)):
                         return mm.group(0)
-                    return "".join(re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", str(i), mm.group(7)) for i in rng)
-                html = re.sub(r"@for\s*\(\s*\$(\w+)\s*=\s*(-?\d+)\s*;\s*\$(\w+)\s*(<=?)\s*(-?\d+)\s*;\s*\$(\w+)\+\+\s*\)(.*?)@endfor\b", _for, html, flags=re.S)
+                    d = 1 if st == "++" else -1 if st == "--" else (int(mm.group(8)) if st.startswith("+") else -int(mm.group(8)))
+                    if d == 0:
+                        return mm.group(0)
+                    test = {"<": lambda x: x < b, "<=": lambda x: x <= b, ">": lambda x: x > b, ">=": lambda x: x >= b, "!=": lambda x: x != b}[op]
+                    out, x = [], a
+                    while test(x):
+                        if len(out) >= 1000:
+                            return mm.group(0)
+                        out.append(re.sub(r"\{\{\s*\$" + v + r"\s*\}\}", str(x), mm.group(9)))
+                        x += d
+                    return "".join(out)
+                html = re.sub(r"@for\s*\(\s*\$(\w+)\s*=\s*(-?\d+)\s*;\s*\$(\w+)\s*(<=|>=|<|>|!=)\s*(-?\d+)\s*;\s*\$(\w+)\s*(\+\+|--|\+=|-=)\s*(\d*)\s*\)(.*?)@endfor\b", _for, html, flags=re.S)
             data = {}
             if html is not None and (m.group(5) or "@php" in html):
                 # Route::view data: literal 'key' => 'value' pairs fill {{ $key }} (HTML-escaped, as Blade does).

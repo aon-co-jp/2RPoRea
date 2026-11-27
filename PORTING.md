@@ -246,3 +246,7 @@
 ## 2026-11-27 23:17 配列形の has/filled/hasAny/anyFilled / Array forms
 **日本語**: `$request->has(['a','b'])`・`filled([...])`(すべて)と `hasAny([...])`・`anyFilled([...])`(どれか)を、かっこ付きの `&&`/`||` に展開して変換。curl実測4件一致(`b=1&c=1&d=`→ng、`b=1&c=1&d=2`→ok など)。テスト44件。
 **English**: `has([...])` / `filled([...])` (all) and `hasAny([...])` / `anyFilled([...])` (any) expand into parenthesized `&&`/`||`. Four curl checks match (e.g. `b=1&c=1&d=` ng, `b=1&c=1&d=2` ok). 44 tests.
+
+## 2026-11-27 23:19 入力値の比較条件 / Input comparisons in conditions
+**日本語**: 条件の中の `$request->input('k') === 'v'`(`==`・`!=`・`!==` も)を変換。かっこ・`&&`/`||` と組める。curl実測: `mode=dark`→hit、`mode=light`→miss、`x=1&y=a`→hit、`x=1&y=z`→miss。数値など文字列でないJSON値は文字列と等しくならない扱い(PHPの `==` の型変換とは違う点がある)。テスト45件。
+**English**: `$request->input('k') === 'v'` (also `==`, `!=`, `!==`) inside conditions translates and combines with parentheses and `&&`/`||`. Measured: `mode=dark` hit, `mode=light` miss, `x=1&y=a` hit, `x=1&y=z` miss. Non-string JSON values never equal a string (unlike PHP's loose `==` conversion). 45 tests.

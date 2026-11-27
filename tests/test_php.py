@@ -273,3 +273,11 @@ def test_has_any(tmp_path):
         "<?php\nRoute::post('/a', function (Request $request) {\n    if ($request->hasAny(['a', 'b']) && $request->filled(['c', 'd'])) { return 'ok'; }\n    return 'ng';\n});\n", encoding="utf-8")
     tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/a"]
     assert tr[0] == "ifcond" and [k for _, _, k, _ in tr[1]] == ["(", "has", "has", ")", "(", "filled", "filled", ")"]
+
+
+def test_input_eq_condition(tmp_path):
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "web.php").write_text(
+        "<?php\nRoute::post('/e', function (Request $request) {\n    if ($request->input('m') === 'd' || $request->input('y') != 'z') { return 'hit'; }\n    return 'miss';\n});\n", encoding="utf-8")
+    tr = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/e"]
+    assert tr[0] == "ifcond" and [(n, k) for _, n, k, _ in tr[1]] == [(False, "eq"), (True, "eq")]

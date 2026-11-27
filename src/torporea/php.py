@@ -327,7 +327,7 @@ _ATOM = re.compile(r"(&&|\|\|)?\s*(!?)\s*\$request->(has|filled|missing|boolean)
 _ELSE = re.compile(r"\s*else\s*\{([^{}]*)\}\s*$", re.S)
 
 
-_TOK = re.compile(r"\s*(&&|\|\||!|\(|\)|\$request->(has|filled|missing|boolean)\(\s*'(\w+)'\s*\))")
+_TOK = re.compile(r"\s*(&&|\|\||!|\(|\)|\$request->(has|filled|missing|boolean)\(\s*'(\w+)'\s*\)|\$request->input\(\s*'(\w+)'\s*\)\s*(===?|!==?)\s*'([^'\\]*)')")
 
 
 def _cond_tokens(s: str):
@@ -348,6 +348,9 @@ def _cond_tokens(s: str):
                 out.append((j, neg, "(", "")); j, neg, depth = "", False, depth + 1
             elif m.group(2):
                 out.append((j, neg, m.group(2), m.group(3))); j, neg, want_atom = "", False, False
+            elif m.group(4):
+                n2 = neg != m.group(5).startswith("!")
+                out.append((j, n2, "eq", m.group(4) + "\0" + m.group(6))); j, neg, want_atom = "", False, False
             else:
                 return None
         else:
@@ -416,7 +419,7 @@ def translate(body: str, params: list):
         atoms = [(j or "", n == "!", k, key) for j, n, k, key in _ATOM.findall(m.group(1))]
         return ("ifcond", atoms, then, other)
     pm = _if_paren(b)
-    toks = _cond_tokens(pm[0]) if pm and "(" in re.sub(r"->(?:has|filled|missing|boolean)\(", "", pm[0]) else None
+    toks = _cond_tokens(pm[0]) if pm and ("(" in re.sub(r"->(?:has|filled|missing|boolean|input)\(", "", pm[0]) or "->input(" in pm[0]) else None
     if toks:
         then = translate(pm[1], params)
         em = _ELSE.fullmatch(pm[2]) if pm[2].strip().startswith("else") else None
@@ -479,6 +482,10 @@ def translate(body: str, params: list):
 def _has_rs(kind: str, key: str) -> str:
     if kind == "has":
         return "input.contains_key(%s)" % _rs_str(key)
+    if kind == "eq":
+        # Form and JSON strings compare as text; other JSON values never equal a string literal.
+        k, v = key.split("\0", 1)
+        return "(input.get(%s).and_then(|v| v.as_str()) == Some(%s))" % (_rs_str(k), _rs_str(v))
     if kind == "boolean":
         # Laravel boolean(): true for 1, "1", true, "true", "on", "yes"; anything else false.
         return "input.get(%s).is_some_and(|v| match v { serde_json::Value::Bool(b) => *b, serde_json::Value::Number(n) => n.as_i64() == Some(1), serde_json::Value::String(t) => matches!(t.to_ascii_lowercase().as_str(), \"1\" | \"true\" | \"on\" | \"yes\"), _ => false })" % _rs_str(key)

@@ -167,3 +167,10 @@ def test_response_status():
     assert translate("return response('x');", []) == ("text", [("lit", "x")])
     s = render_main([("GET", "/g", [], ("status", 410, ("text", [("lit", "g")])), "routes/web.php")])
     assert "StatusCode::from_u16(410)" in s
+
+
+def test_response_header():
+    t = translate("return response('a', 201)->header('X-Id', '7');", [])
+    assert t == ("hdr", [("X-Id", "7")], ("status", 201, ("text", [("lit", "a")])))
+    s = render_main([("GET", "/h", [], t, "routes/web.php")])
+    assert 'insert("x-id", "7".parse().unwrap())' in s

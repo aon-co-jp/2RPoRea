@@ -163,28 +163,21 @@ class _P:
             self.take()
             return ("json", float(v) if "." in v else int(v))
         if k == "word" and v == "response":
-            self.take(); self.take("(")
-            if self.peek()[1] != ")":
-                body = self.value()
-                code = 200
-                if self.peek()[1] == ",":
-                    self.take(",")
-                    kc, vc = self.take()
-                    if kc != "num":
-                        raise _Unsupported("non-literal status")
-                    code = int(vc)
-                self.take(")")
-                if body[0] not in ("text", "json") or (body[0] == "json" and not isinstance(body[1], str)):
-                    raise _Unsupported("response() body")
-                if body[0] == "json":
-                    body = ("text", [("lit", body[1])])
-                return ("status", code, body) if code != 200 else body
-            self.take(")")
-            self.take("->"); k2, v2 = self.take()
-            if v2 != "json":
-                raise _Unsupported("response()->" + v2)
-            self.take("(")
-            inner = self.value()
+            r = self._response()
+            hs = []
+            while self.peek()[1] == "->" and self.t[self.i + 1] == ("word", "header"):
+                self.take("->"); self.take(); self.take("(")
+                hk = self.value(); self.take(","); hv = self.value(); self.take(")")
+                if any(x[0] != "text" or any(p[0] != "lit" for p in x[1]) for x in (hk, hv)):
+                    raise _Unsupported("non-literal header")
+                hs.append(("".join(p[1] for p in hk[1]), "".join(p[1] for p in hv[1])))
+            return ("hdr", hs, r) if hs else r
+        return self.concat()
+
+    def _response(self):
+        self.take(); self.take("(")
+        if self.peek()[1] != ")":
+            body = self.value()
             code = 200
             if self.peek()[1] == ",":
                 self.take(",")
@@ -193,16 +186,34 @@ class _P:
                     raise _Unsupported("non-literal status")
                 code = int(vc)
             self.take(")")
-            if code != 200:
-                if inner[0] not in ("json", "input_all"):
-                    raise _Unsupported("json of non-literal")
-                return ("status", code, inner)
-            if inner[0] == "input_all":
-                return inner
-            if inner[0] != "json":
+            if body[0] not in ("text", "json") or (body[0] == "json" and not isinstance(body[1], str)):
+                raise _Unsupported("response() body")
+            if body[0] == "json":
+                body = ("text", [("lit", body[1])])
+            return ("status", code, body) if code != 200 else body
+        self.take(")")
+        self.take("->"); k2, v2 = self.take()
+        if v2 != "json":
+            raise _Unsupported("response()->" + v2)
+        self.take("(")
+        inner = self.value()
+        code = 200
+        if self.peek()[1] == ",":
+            self.take(",")
+            kc, vc = self.take()
+            if kc != "num":
+                raise _Unsupported("non-literal status")
+            code = int(vc)
+        self.take(")")
+        if code != 200:
+            if inner[0] not in ("json", "input_all"):
                 raise _Unsupported("json of non-literal")
-            return ("json", inner[1])
-        return self.concat()
+            return ("status", code, inner)
+        if inner[0] == "input_all":
+            return inner
+        if inner[0] != "json":
+            raise _Unsupported("json of non-literal")
+        return ("json", inner[1])
 
     def concat(self):
         parts = []
@@ -390,6 +401,9 @@ def _has_rs(kind: str, key: str) -> str:
 
 
 def _leaf_rs(tr) -> str:
+    if tr[0] == "hdr":
+        sets = " ".join("r.headers_mut().insert(%s, %s.parse().unwrap());" % (_rs_str(k.lower()), _rs_str(v)) for k, v in tr[1])
+        return "{ let mut r = { %s }; %s r }" % (_leaf_rs(tr[2]), sets)
     if tr[0] == "status":
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
     if tr[0] == "back":
@@ -513,6 +527,8 @@ def _uses_input(tr) -> bool:
     if tr[0] == "ifcond":
         return True
     if tr[0] == "status":
+        return _uses_input(tr[2])
+    if tr[0] == "hdr":
         return _uses_input(tr[2])
     return tr[0] == "input_all" or (tr[0] == "text" and any(k == "query" for k, _ in tr[1]))
 

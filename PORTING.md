@@ -198,3 +198,7 @@
 ## 2026-11-27 22:50 `response('text', code)` / `response()->json(..., code)`
 **日本語**: 状態コードつきの `response('本文', 201)`・`response()->json([...], 201)`(`$request->all()` 等も可)を変換。curl実測: `/mk`→`{"ok":true} [201]`、`/gone`→`Gone away [410]`。テスト33件。状態コードは数値リテラルのみ、ヘッダー指定(第3引数・`->header()`)は未対応(501)。
 **English**: `response('body', 201)` and `response()->json([...], 201)` (also with `$request->all()` etc.) are now converted with their status code. Measured with curl: `/mk` gives `{"ok":true} [201]`, `/gone` gives `Gone away [410]`. 33 tests. Status codes must be numeric literals; headers (third argument, `->header()`) are not supported (501).
+
+## 2026-11-27 22:52 `->header('K', 'V')`
+**日本語**: `response(...)` / `response()->json(...)` の後ろに続く `->header('名前', '値')`(複数可、文字列リテラルのみ)を応答ヘッダーへ変換。curl実測: `/hd` → `201 Created` と `x-id: 7`。テスト34件。
+**English**: `->header('Name', 'Value')` chained after `response(...)` or `response()->json(...)` (several allowed, string literals only) now sets response headers. Measured with curl: `/hd` gives `201 Created` and `x-id: 7`. 34 tests.

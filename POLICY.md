@@ -97,3 +97,4 @@
 - 08:21 ビューの計算式(`{{ $n * 3 }}` など)と要素への関数(`strtoupper($xs[0])`・`strlen('abc')`)に対応、curlで実測。 / View arithmetic and functions on items, measured with curl.
 - 08:22 データなしビューの計算式にも対応、curlで実測。 / Arithmetic in views without data, measured with curl.
 - 08:24 配列の関数(`max`・`min`・`end`・`reset`・`array_sum`・`in_array`の三項)に対応、curlで実測。 / Array helpers, measured with curl.
+- 08:25 `str_pad`・`sprintf` に対応、curlで実測。 / `str_pad` and `sprintf`, measured with curl.

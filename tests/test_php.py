@@ -716,3 +716,12 @@ def test_view_array_helpers(tmp_path):
     (tmp_path / "resources/views/g.blade.php").write_text("{{ max(1, $n, 5) }}|{{ min($n, 1) }}|{{ max([3, 9.5]) }}|{{ array_sum([1,2,3]) }}|{{ array_sum([1.5, 2]) }}|{{ end($xs) }}{{ reset($xs) }}|{{ in_array('b', $xs) ? 'y' : 'n' }}{{ in_array('z', $xs) ? 'y' : 'n' }}", encoding="utf-8")
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/g"] == ("text", [("lit", "5|1|9.5|6|3.5|ca|yn")])
+
+
+def test_view_str_pad_sprintf(tmp_path):
+    from torporea.php import routes
+    (tmp_path / "routes").mkdir(); (tmp_path / "resources/views").mkdir(parents=True)
+    (tmp_path / "routes/web.php").write_text("<?php\nRoute::view('/g', 'g', ['n' => '2']);\n", encoding="utf-8")
+    (tmp_path / "resources/views/g.blade.php").write_text("{{ str_pad($n, 3, '0', STR_PAD_LEFT) }}|{{ str_pad('ab', 5, '-', STR_PAD_BOTH) }}|{{ sprintf('%03d', $n) }}|{{ sprintf('%.2f/%5s/%-3s|', 3.14159, 'x', 'y') }}{{ sprintf('%d%%', 50) }}", encoding="utf-8")
+    r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
+    assert r["/g"] == ("text", [("lit", "002|-ab--|002|3.14/    x/y  |50%")])

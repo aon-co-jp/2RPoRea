@@ -1148,6 +1148,64 @@ def routes(root: str) -> list:
                         return q.group(0)
                     return _h2.escape(q.group(3) if q.group(1) in xs else q.group(4))
                 html = re.sub(r"\{\{\s*in_array\(\s*'([^'\\]*)'\s*,\s*\$(\w+)\s*\)\s*\?\s*'([^'\\]*)'\s*:\s*'([^'\\]*)'\s*\}\}", _inarr, html)
+                # str_pad / sprintf over literals and known $vars (ASCII): {{ str_pad($n, 3, '0', STR_PAD_LEFT) }}, {{ sprintf('%03d', $n) }}.
+                def _fmtfn(q):
+                    f, raw = q.group(1), q.group(2)
+                    parts = [x.strip() for x in re.split(r",(?=(?:[^'\x22]*['\x22][^'\x22]*['\x22])*[^'\x22]*$)", raw)]
+                    if f == "str_pad":
+                        if not 2 <= len(parts) <= 4:
+                            return q.group(0)
+                        sv, ln = _arg(parts[0]), _arg(parts[1])
+                        pad = _arg(parts[2]) if len(parts) > 2 else " "
+                        mode = parts[3] if len(parts) > 3 else "STR_PAD_RIGHT"
+                        if not (isinstance(sv, str) and isinstance(ln, str) and isinstance(pad, str) and pad and re.fullmatch(r"\d+", ln) and int(ln) <= 1000 and sv.isascii() and pad.isascii()):
+                            return q.group(0)
+                        n = int(ln) - len(sv)
+                        if n <= 0:
+                            return _h2.escape(sv)
+                        if mode == "STR_PAD_LEFT":
+                            return _h2.escape((pad * n)[:n] + sv)
+                        if mode == "STR_PAD_RIGHT":
+                            return _h2.escape(sv + (pad * n)[:n])
+                        if mode == "STR_PAD_BOTH":
+                            l = n // 2
+                            return _h2.escape((pad * l)[:l] + sv + (pad * (n - l))[:n - l])
+                        return q.group(0)
+                    fm = re.fullmatch(r"('|\x22)(.*)\1", parts[0], re.S) if parts else None
+                    if not fm:
+                        return q.group(0)
+                    vals = [_arg(x) for x in parts[1:]]
+                    if any(not isinstance(v, str) for v in vals):
+                        return q.group(0)
+                    it = iter(vals)
+                    def _one(sp):
+                        if sp.group(0) == "%%":
+                            return "%"
+                        v = next(it, None)
+                        if v is None:
+                            raise ValueError
+                        flag, width, prec, conv = sp.group(1), sp.group(2), sp.group(3), sp.group(4)
+                        if conv in "df":
+                            if not re.fullmatch(r"-?\d+(?:\.\d+)?", v):
+                                raise ValueError
+                            body = str(int(float(v))) if conv == "d" else format(float(v), "." + (prec or "6") + "f")
+                        else:
+                            body = v[:int(prec)] if prec else v
+                        w = int(width or 0)
+                        if flag == "-":
+                            return body.ljust(w)
+                        if flag == "0" and conv in "df":
+                            neg = body.startswith("-")
+                            return ("-" if neg else "") + body.lstrip("-").rjust(w - neg, "0")
+                        return body.rjust(w)
+                    try:
+                        out = re.sub(r"%%|%([-0]?)(\d*)(?:\.(\d+))?([dfs])", _one, fm.group(2))
+                    except ValueError:
+                        return q.group(0)
+                    if next(it, None) is not None or "%" in re.sub(r"%%|%[-0]?\d*(?:\.\d+)?[dfs]", "", fm.group(2)):
+                        return q.group(0)
+                    return _h2.escape(out)
+                html = re.sub(r"\{\{\s*(str_pad|sprintf)\s*\(([^(){}]*)\)\s*\}\}", _fmtfn, html)
                 # {{ expr }} with integer/float arithmetic over literals and known $vars (e.g. {{ $n * 3 }}).
                 def _arith(q):
                     if not re.search(r"[-+*/%]", q.group(1)):

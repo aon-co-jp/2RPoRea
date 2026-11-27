@@ -443,3 +443,12 @@ def test_view_php_muldiv(tmp_path):
     r = {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}
     assert r["/p"] == ("text", [("lit", "14,2,-1")])
     assert r["/q"] is None
+
+
+def test_view_php_parens(tmp_path):
+    (tmp_path / "routes").mkdir()
+    v = tmp_path / "resources" / "views"
+    v.mkdir(parents=True)
+    (v / "p.blade.php").write_text("@php($n = 3)@php($a = (2 + $n) * (4 - 1))@php $b = -(10 - 4) / 2; @endphp{{ $a }},{{ $b }}", encoding="utf-8")
+    (tmp_path / "routes" / "web.php").write_text("<?php\nRoute::view('/p', 'p');\n", encoding="utf-8")
+    assert {p: tr for _, p, _, tr, _ in routes(str(tmp_path))}["/p"] == ("text", [("lit", "15,-3")])

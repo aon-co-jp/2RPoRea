@@ -615,6 +615,12 @@ def routes(root: str) -> list:
                         if not q:
                             return None
                         # RHS: literals and already-known $vars joined by '.' (concat) or by '+'/'-' (integers).
+                        if "(" in q.group(2):
+                            r = _int_expr(q.group(2), data)
+                            if r is None:
+                                return None
+                            data[q.group(1)] = r
+                            continue
                         term = r"""'[^'\\]*'|"[^"\\$]*"|-?\d+|\$\w+"""
                         toks = re.findall(r"\s*(" + term + r")\s*([.+*/%-]|$)", q.group(2))
                         if not toks or toks[-1][1] or re.sub(r"\s", "", q.group(2)) != "".join(re.sub(r"\s", "", a) + o for a, o in toks):
@@ -663,8 +669,22 @@ def routes(root: str) -> list:
                         data[q.group(1)] = r
                     return ""
                 if html is not None:
-                    for pat in (r"@php\s*\((.*?)\)", r"@php\b(.*?)@endphp\b"):
-                        html = re.sub(pat, lambda q: q.group(0) if _php(q.group(1)) is None else "", html, flags=re.S)
+                    # inline @php( ... ) with balanced parentheses, then @php ... @endphp blocks
+                    out_h, pos = [], 0
+                    for st in re.finditer(r"@php\s*\(", html):
+                        if st.start() < pos:
+                            continue
+                        depth, j = 1, st.end()
+                        while j < len(html) and depth:
+                            depth += {"(": 1, ")": -1}.get(html[j], 0)
+                            j += 1
+                        if depth:
+                            break
+                        code = html[st.end():j - 1]
+                        out_h.append(html[pos:st.start()] + (html[st.start():j] if _php(code) is None else ""))
+                        pos = j
+                    html = "".join(out_h) + html[pos:]
+                    html = re.sub(r"@php\b(?!\s*\()(.*?)@endphp\b", lambda q: q.group(0) if _php(q.group(1)) is None else "", html, flags=re.S)
                     # @while($i < N) ... @php($i++) ... @endwhile with an integer $i set by @php: unrolled (capped at 1000).
                     def _while(q):
                         v, op, n, body = q.group(1), q.group(2), int(q.group(3)), q.group(4)
@@ -933,3 +953,74 @@ def write(root: str, out: str, rpoem_path: str = "F:/RPoem") -> dict:
     done = sum(1 for r in rts if r[3] is not None)
     return {"routes": len(rts), "translated": done, "todo": len(rts) - done,
             "patch": sum(1 for r in rts if r[0] == "PATCH")}
+
+
+def _int_expr(src, data):
+    """Evaluate a PHP integer expression with + - * / % and parentheses over literals and known $vars.
+
+    Returns the decimal text, or None when it is not purely integer or PHP would differ (inexact /, division by 0)."""
+    toks = re.findall(r"\s*(\d+|\$\w+|[-+*/%()])", src)
+    if re.sub(r"\s", "", src) != "".join(toks):
+        return None
+    vals = []
+    for t in toks:
+        if t[0] == "$":
+            v = data.get(t[1:])
+            if not isinstance(v, str) or not re.fullmatch(r"-?\d+", v):
+                return None
+            vals.append(int(v))
+        else:
+            vals.append(int(t) if t.isdigit() else t)
+    pos = [0]
+
+    class _Bad(Exception):
+        pass
+
+    def peek():
+        return vals[pos[0]] if pos[0] < len(vals) else None
+
+    def take():
+        pos[0] += 1
+        return vals[pos[0] - 1]
+
+    def atom():
+        t = take() if peek() is not None else None
+        if t == "(":
+            r = add()
+            if take() != ")":
+                raise _Bad
+            return r
+        if t == "-":
+            return -atom()
+        if t == "+":
+            return atom()
+        if isinstance(t, int):
+            return t
+        raise _Bad
+
+    def mul():
+        r = atom()
+        while peek() in ("*", "/", "%"):
+            o, x = take(), atom()
+            if o == "*":
+                r *= x
+            elif x == 0 or (o == "/" and r % x):
+                raise _Bad
+            elif o == "/":
+                r = r // x if (r >= 0) == (x > 0) else -(abs(r) // abs(x))
+            else:
+                r = abs(r) % abs(x) * (1 if r >= 0 else -1)
+        return r
+
+    def add():
+        r = mul()
+        while peek() in ("+", "-"):
+            o, x = take(), mul()
+            r = r + x if o == "+" else r - x
+        return r
+
+    try:
+        r = add()
+    except (_Bad, IndexError):
+        return None
+    return str(r) if pos[0] == len(vals) else None

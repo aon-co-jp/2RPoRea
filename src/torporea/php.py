@@ -142,6 +142,9 @@ class _P:
         if k == "var" and self.env.get(v[1:], ("", None))[0] == "json":
             self.take()
             return self.env[v[1:]]
+        if k == "var" and v == "$request" and self.t[self.i + 1:self.i + 5] == [("op", "->"), ("word", "all"), ("op", "("), ("op", ")")]:
+            self.i += 5
+            return ("input_all",)
         if v == "[":
             return ("json", self.array())
         if k == "word" and v.lower() in ("true", "false", "null"):
@@ -158,6 +161,8 @@ class _P:
             self.take("(")
             inner = self.value()
             self.take(")")
+            if inner[0] == "input_all":
+                return inner
             if inner[0] != "json":
                 raise _Unsupported("json of non-literal")
             return ("json", inner[1])
@@ -310,6 +315,8 @@ def _leaf_rs(tr) -> str:
     if tr[0] == "if":
         cmp_ = "!=" if tr[2] else "=="
         return "if params.get(%s).unwrap_or(\"\") %s %s { %s } else { %s }" % (_rs_str(tr[1]), cmp_, _rs_str(tr[3]), _leaf_rs(tr[4]), _leaf_rs(tr[5]))
+    if tr[0] == "input_all":
+        return "hyper_compat::json_response(StatusCode::OK, &input)"
     if tr[0] == "json":
         return "hyper_compat::json_response(StatusCode::OK, &serde_json::from_str::<serde_json::Value>(%s).unwrap())" % _rs_str(json.dumps(tr[1], ensure_ascii=False))
     def piece(k, v):
@@ -402,7 +409,7 @@ fn form_decode(s: &str) -> String {
 def _uses_input(tr) -> bool:
     if tr[0] == "if":
         return _uses_input(tr[4]) or _uses_input(tr[5])
-    return tr[0] == "text" and any(k == "query" for k, _ in tr[1])
+    return tr[0] == "input_all" or (tr[0] == "text" and any(k == "query" for k, _ in tr[1]))
 
 
 def render_main(rts: list) -> str:

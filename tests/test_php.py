@@ -102,7 +102,14 @@ def test_if_on_route_parameter():
 def test_request_input():
     t = translate("$who = $request->input('who', 'guest'); return 'Hi ' . $who . ' ' . request('n');", [])
     assert t == ("text", [("lit", "Hi "), ("query", ("who", "guest")), ("lit", " "), ("query", ("n", ""))])
-    assert translate("return $request->all();", []) is None
     assert translate("return $request->input($k);", []) is None
     s = render_main([("GET", "/q", [], t, "routes/web.php")])
     assert 'input.get("who").map(String::as_str).unwrap_or("guest")' in s and "async fn read_input(" in s
+
+
+def test_request_all():
+    assert translate("return $request->all();", []) == ("input_all",)
+    assert translate("return response()->json($request->all());", []) == ("input_all",)
+    assert translate("return $request->all() . 'x';", []) is None
+    s = render_main([("POST", "/echo", [], ("input_all",), "routes/web.php")])
+    assert "let input = read_input(req).await;" in s and "json_response(StatusCode::OK, &input)" in s

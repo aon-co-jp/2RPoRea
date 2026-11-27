@@ -582,3 +582,8 @@
 **日本語**: `@if(...) ... @elseif(...) ... [@else ...] @endif`(本文に入れ子の @if が無いもの)を入れ子の @if/@else に書き換え、比較式として変換時に解決。テスト99件成功、実サーバーで `/ez` = `C` を実測。未了: 単純な `@if($k)` と `@elseif` の組み合わせ(前段の処理が `@elseif` を `@else` と取り違える恐れ、未確認)、`withInput`(セッション層が必要)。
 **English**: `@if(...) ... @elseif(...) ... [@else ...] @endif` (no nested @if in the bodies) is rewritten into nested @if/@else and resolved as comparisons at convert time. 99 tests pass; measured `/ez` = `C` on the real server. Open: a plain `@if($k)` combined with `@elseif` (the earlier pass may mistake `@elseif` for `@else`; unverified), and `withInput` (needs a session layer).
 **再開用メッセージ / Resume**: `F:\2RPoRea\PORTING.md` 末尾を読み、php 変換の未了を確認なしで進める。/ Read the end of `F:\2RPoRea\PORTING.md` and continue the php-conversion open items without asking.
+
+## 2026-11-28 08:39 2RPoRea 単純な @if($k) と @elseif の修正 / Fix: plain @if($k) with @elseif
+**日本語**: 単純な `@if($k)` が偽のとき、前段の処理が `@elseif` を `@else` と取り違えて壊れた文字を出す不具合を確認し修正(偽なら `@elseif` 以降を比較式の @if として後段で解決)。テスト100件成功、実サーバーで `/pz` = `B|A` を実測。未了: `@elseif($k)` のような単純な変数の @elseif、`withInput`(セッション層が必要)。
+**English**: Confirmed and fixed a bug: when a plain `@if($k)` was false, the earlier pass mistook `@elseif` for `@else` and emitted broken text (now the `@elseif` part becomes a comparison @if resolved later). 100 tests pass; measured `/pz` = `B|A` on the real server. Open: `@elseif($k)` with a plain variable, `withInput` (needs a session layer).
+**再開用メッセージ / Resume**: `F:\2RPoRea\PORTING.md` 末尾を読み、php 変換の未了を確認なしで進める(12:00まで)。/ Read the end of `F:\2RPoRea\PORTING.md` and continue the php-conversion open items without asking (until 12:00).

@@ -930,6 +930,13 @@ def routes(root: str) -> list:
                         k = mm.group(2)
                         if mm.group(1) in ("if", "unless") and k not in data:
                             return mm.group(0)
+                        t0 = mm.group(0)
+                        if "@elseif" in t0:
+                            if mm.group(1) != "if" or not re.fullmatch(r"(?:(?!@if).)*", t0[3:], re.S):
+                                return t0
+                            ok = bool(data[k]) if isinstance(data[k], list) else data[k] not in ("", "0")
+                            pos = t0.index("@elseif")
+                            return mm.group(3).split("@elseif", 1)[0] if ok else "@" + t0[pos + len("@else"):]
                         ok = (k in data) if mm.group(1) == "isset" else (bool(data[k]) if isinstance(data[k], list) else data[k] not in ("", "0"))
                         if mm.group(1) == "unless":
                             ok = not ok

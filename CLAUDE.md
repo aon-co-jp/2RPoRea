@@ -141,3 +141,4 @@
 - 2026-11-28 `@checked/@selected/@disabled/@readonly/@required($k)` を変換(実測一致) / attribute directives converted (measured).
 - 2026-11-28 属性ディレクティブの比較式(`@selected($c == 'jp')`)に対応(実測一致) / comparison arguments for attribute directives (measured).
 - 2026-11-28 `@switch`/`@case`/`@default` を変換(実測一致) / `@switch` converted (measured).
+- 2026-11-28 `@class`/`@style` を変換(実測一致) / `@class`/`@style` converted (measured).

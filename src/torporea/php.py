@@ -1510,6 +1510,26 @@ def routes(root: str) -> list:
                                 break
                     return out or ""
                 html = re.sub(r"@switch\(\s*\$(\w+)\s*\)((?:(?!@switch\b).)*?)@endswitch\b", _sw, html, flags=re.S)
+                # @class(['a', 'b' => $k, 'c' => true]) / @style([...]) over literal data: Arr::toCssClasses / toCssStyles.
+                def _cls(q):
+                    out = []
+                    for e in [x.strip() for x in q.group(2).split(",") if x.strip()]:
+                        m = re.fullmatch(r"'([^'\\]*)'(?:\s*=>\s*(?:\$(\w+)|(true|false)))?", e)
+                        if not m:
+                            return q.group(0)
+                        if m.group(2):
+                            if m.group(2) not in data:
+                                return q.group(0)
+                            v = data[m.group(2)]
+                            on = bool(v) if isinstance(v, (list, dict)) else (isinstance(v, str) and v not in ("", "0"))
+                        else:
+                            on = m.group(3) != "false"
+                        if on:
+                            out.append(m.group(1).rstrip(";") if q.group(1) == "style" else m.group(1))
+                    if q.group(1) == "style":
+                        return 'style="%s"' % " ".join(x + ";" for x in out)
+                    return 'class="%s"' % " ".join(out)
+                html = re.sub(r"@(class|style)\(\s*\[([^\]]*)\]\s*\)", _cls, html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

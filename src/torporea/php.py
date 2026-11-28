@@ -1826,8 +1826,19 @@ def routes(root: str) -> list:
                 def _cfg(q):
                     fn, _, key = q.group(2).partition(".")
                     cf = os.path.join(root, "config", fn + ".php")
-                    if key and "." not in key and os.path.exists(cf):
+                    if key and os.path.exists(cf):
                         src = open(cf, encoding="utf-8").read()
+                        # nested keys (a.b.c): narrow src to the balanced [ ... ] of each parent key
+                        *parents, key = key.split(".")
+                        for pk in parents:
+                            mp = re.search(r"['\"]" + re.escape(pk) + r"['\"]\s*=>\s*\[", src)
+                            if not mp:
+                                return q.group(4) or ""
+                            depth, i = 1, mp.end()
+                            while i < len(src) and depth:
+                                depth += {"[": 1, "]": -1}.get(src[i], 0)
+                                i += 1
+                            src = src[mp.end():i - 1] + ","
                         mm = re.search(r"['\"]" + re.escape(key) + r"['\"]\s*=>\s*(?:'((?:[^'\\]|\\.)*)'|(-?\d+(?:\.\d+)?)|(true|false))\s*[,\]]", src)
                         if mm:
                             if mm.group(1) is not None:

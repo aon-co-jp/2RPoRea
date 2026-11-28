@@ -841,13 +841,31 @@ def _blade_layout(root: str, html, depth: int = 0):
     # (the condition is decided at run time by the normal view pipeline).
     html = re.sub(r"@include(When|Unless)\(\s*(\$\w+)\s*,\s*(['\"])([\w.-]+)\3\s*((?:,\s*\[[^\[\]]*\]\s*)?)\)",
                   lambda m: "@%s(%s)@include('%s'%s)@end%s" % ("if" if m.group(1) == "When" else "unless", m.group(2), m.group(4), m.group(5).rstrip(), "if" if m.group(1) == "When" else "unless"), html)
+    # @includeFirst(['a', 'b'], [...]): the first view that exists (none existing is a TODO).
+    def _first(m):
+        names = re.findall(r"['\"]([\w.-]+)['\"]", m.group(1))
+        if re.sub(r"\s*['\"][\w.-]+['\"]\s*,?", "", m.group(1)).strip():
+            return bad
+        for nm in names:
+            if _load(nm) is not None:
+                return "@include('%s'%s)" % (nm, m.group(2).rstrip())
+        return bad
+    html = re.sub(r"@includeFirst\(\s*\[([^\[\]]*)\]\s*((?:,\s*\[[^\[\]]*\]\s*)?)\)", _first, html)
+    # @each('v', $items, 'item'[, 'empty-view' | 'raw:text']): a loop around @include.
+    def _each(m):
+        tail = m.group(5)
+        if tail is None:
+            return "@foreach(%s as $%s)@include('%s')@endforeach" % (m.group(3), m.group(4), m.group(2))
+        empty = tail[4:] if tail.startswith("raw|") else "@include('%s')" % tail
+        return "@forelse(%s as $%s)@include('%s')@empty%s@endforelse" % (m.group(3), m.group(4), m.group(2), empty)
+    html = re.sub(r"@each\(\s*(['\"])([\w.-]+)\1\s*,\s*(\$\w+)\s*,\s*['\"](\w+)['\"]\s*(?:,\s*['\"]([^'\"]*)['\"]\s*)?\)", _each, html)
     # @includeIf('v'): included when the view exists, nothing otherwise.
     html = re.sub(r"@includeIf\(\s*(['\"])([\w.-]+)\1\s*((?:,\s*\[[^\[\]]*\]\s*)?)\)",
                   lambda m: ("@include('%s'%s)" % (m.group(2), m.group(3).rstrip())) if _load(m.group(2)) is not None else "", html)
     html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*\[([^\[\]]*)\]\s*)?\)", _inc, html)
     if depth == 0:
         html = re.sub(r"@once\b(.*?)@endonce\b", _once, html, flags=re.S)
-    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|prepend|endprepend|stack|parent|show|once|endonce|hasSection|sectionMissing|includeIf|includeWhen|includeUnless)\b", html)):
+    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|prepend|endprepend|stack|parent|show|once|endonce|hasSection|sectionMissing|includeIf|includeWhen|includeUnless|includeFirst|each)\b", html)):
         return None
     return html
 
@@ -1146,7 +1164,7 @@ def routes(root: str) -> list:
                         if not isinstance(v, (list, dict)):
                             return mm.group(0)
                         return mm.group(4) if not v else "@foreach(" + mm.group(1) + ")" + mm.group(3) + "@endforeach"
-                    html = re.sub(r"@forelse\s*\(\s*(\$(\w+)\s+as\s+[^)]*)\)(.*?)@empty\b(.*?)@endforelse\b", _forelse, html, flags=re.S)
+                    html = re.sub(r"@forelse\s*\(\s*(\$(\w+)\s+as\s+[^)]*)\)(.*?)@empty(?!\s*\()(.*?)@endforelse\b", _forelse, html, flags=re.S)
                     # @foreach(range(A, B[, step]) as $v) with integer literals: the range becomes hidden view data (capped at 1000).
                     def _rng(q):
                         a, b, st = int(q.group(1)), int(q.group(2)), int(q.group(3) or 1)

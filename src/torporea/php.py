@@ -1791,9 +1791,19 @@ def routes(root: str) -> list:
                 # @env('local') / @env(['a', 'b']) / @production ... [@else ...] @endenv / @endproduction (plain text bodies)
                 def _envif(q):
                     def _lits(x):
-                        if "{{" in x or "{!!" in x or re.search(r"(?<![\w@])@\w", x) or chr(1) in x:
-                            raise ValueError
-                        return [("lit", x)] if x else []
+                        # plain text plus runtime pieces already turned into RQ placeholders (old(), session(), @error ...)
+                        out = []
+                        for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), x)):
+                            if i % 2:
+                                e = rq[int(seg)]
+                                if e[0] not in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if"):
+                                    raise ValueError
+                                out.append(e)
+                            elif seg:
+                                if "{{" in seg or "{!!" in seg or re.search(r"(?<![\w@])@\w", seg) or chr(1) in seg:
+                                    raise ValueError
+                                out.append(("lit", seg))
+                        return out
                     try:
                         tp, op = _lits(q.group(3)), _lits(q.group(4) or "")
                     except ValueError:
@@ -1801,7 +1811,6 @@ def routes(root: str) -> list:
                     envs = ["production"] if q.group(1) == "production" else re.findall(r"['\"]([\w.-]+)['\"]", q.group(2))
                     rq.append(("env_if", (envs, tp, op)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
-                html = re.sub(r"@(env|production)\b(?:\s*\(\s*(\[[^\]]*\]|['\"][\w.-]+['\"])\s*\))?((?:(?!@(?:env|production|else|endenv|endproduction)\b).)*?)(?:@else((?:(?!@(?:endenv|endproduction)\b).)*?))?@end(?:env|production)\b", _envif, html, flags=re.S)
                 html = re.sub(r"@if\s*\(\s*session\(\s*(['\"])([\w.-]+)\1\s*\)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _sessif, html, flags=re.S)
                 def _errf(q):
                     rq.append(("err_first", q.group(2)))
@@ -1867,6 +1876,7 @@ def routes(root: str) -> list:
                     rq.append(("err_if", (q.group(2) or "", tp, op)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"@if\s*\(\s*\$errors\s*->\s*(?:any\(\s*\)|has\(\s*(['\"])([\w.-]+)\1\s*\))\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _errif, html, flags=re.S)
+                html = re.sub(r"@(env|production)\b(?:\s*\(\s*(\[[^\]]*\]|['\"][\w.-]+['\"])\s*\))?((?:(?!@(?:env|production|else|endenv|endproduction)\b).)*?)(?:@else((?:(?!@(?:endenv|endproduction)\b).)*?))?@end(?:env|production)\b", _envif, html, flags=re.S)
             # Only plain HTML views: any Blade syntax ({{ }}, {!! !!}, @directives) stays a 501 TODO.
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None

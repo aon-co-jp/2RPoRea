@@ -217,3 +217,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 @verbatim 対応・実測済み / @verbatim, measured (PORTING.md)
 
 - 2026-11-28 @env・@production 対応(実行時の APP_ENV)・実測済み / @env and @production (APP_ENV at run time), measured (PORTING.md)
+- 2026-11-28 @env の中に Blade の部品 / Blade pieces inside @env (113 tests pass)

@@ -1970,6 +1970,8 @@ def routes(root: str) -> list:
                 html = re.sub(r"""\{\{\s*date\(\s*(['"])([YymndjHGisDlNwMFghAa:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
                 # Carbon properties: now()->year / month / day / hour / dayOfWeek (unpadded integers)
                 _CP = {"year": "Y", "month": "n", "day": "j", "hour": "G", "dayOfWeek": "w", "minute": "\u00b5", "second": "\u00b6"}  # internal unpadded minute/second
+                _CM = {"toDateString": "Y-m-d", "toDateTimeString": "Y-m-d H:i:s", "toTimeString": "H:i:s"}
+                html = re.sub(r"\{\{\s*now\(\)\s*->\s*(toDateString|toDateTimeString|toTimeString)\(\)\s*\}\}", lambda q: _date(q, _CM[q.group(1)]), html)
                 html = re.sub(r"\{\{\s*now\(\)\s*->\s*(year|month|day|hour|dayOfWeek|minute|second)\s*\}\}", lambda q: _date(q, _CP[q.group(1)]), html)
                 html = re.sub(r"""\{\{\s*now\(\)\s*->\s*format\(\s*(['"])([YymndjHGisDlNwMFghAa:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
                 def _envv(q):

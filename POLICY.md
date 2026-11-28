@@ -186,3 +186,4 @@
 - 2026-11-28 日付の書式文字を追加 / More date format letters (113 tests pass)
 - 2026-11-28 now() の year/month/day/hour/dayOfWeek / Carbon properties (113 tests pass)
 - 2026-11-28 now()->minute/second / Minute and second (113 tests pass)
+- 2026-11-28 toDateString() など / Date string helpers (113 tests pass)

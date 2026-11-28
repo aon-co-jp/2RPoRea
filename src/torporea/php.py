@@ -482,15 +482,15 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
-        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))((?:\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?)(?:\s*\.\s*(?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?))*)\s*\))+)", stmts[-1], re.S)
+        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))((?:\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?)(?:\s*\.\s*(?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?))*)\s*\))+)", stmts[-1], re.S)
         if bw:
             # redirect('/path')->with(...) goes to the literal path; back() to the Referer. Each ->with('k', v) takes a
             # literal, $request->input('x') (run-time value) or a route parameter.
             items = []
-            for wm in re.finditer(r"\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?)(?:\s*\.\s*(?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?))*)\s*\)", bw.group(2)):
+            for wm in re.finditer(r"\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?)(?:\s*\.\s*(?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?))*)\s*\)", bw.group(2)):
                 # 'a' . $id . $request->input('x'): concatenation of literals, route parameters and request values.
                 parts = []
-                for am in re.finditer(r"'([^'\\]*)'|(?:(strtoupper|strtolower|trim|ucfirst)\(\s*)?(?:\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))(?(2)\s*\))", wm.group(2)):
+                for am in re.finditer(r"'([^'\\]*)'|(?:(strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))(?(2)\s*\))", wm.group(2)):
                     if am.group(4) and am.group(4) not in params:
                         return None
                     a = ("param", am.group(4)) if am.group(4) else (am.group(1) if am.group(3) is None else ("in", am.group(3)))
@@ -598,7 +598,7 @@ def _leaf_rs(tr) -> str:
             if v[0] == "cat":
                 def _t(x):
                     if not isinstance(x, str) and x[0] == "fn":
-                        f = {"strtoupper": "s2.to_uppercase()", "strtolower": "s2.to_lowercase()", "trim": "s2.trim().to_string()", "ucfirst": "{ let mut c = s2.chars(); match c.next() { Some(h) => h.to_uppercase().collect::<String>() + c.as_str(), None => String::new() } }"}[x[1]]
+                        f = {"strtoupper": "s2.to_uppercase()", "strtolower": "s2.to_lowercase()", "trim": "s2.trim().to_string()", "ltrim": "s2.trim_start().to_string()", "rtrim": "s2.trim_end().to_string()", "strrev": "s2.chars().rev().collect::<String>()", "lcfirst": "{ let mut c = s2.chars(); match c.next() { Some(h) => h.to_lowercase().collect::<String>() + c.as_str(), None => String::new() } }", "ucwords": "{ let mut o = String::new(); let mut up = true; for ch in s2.chars() { if up { o.extend(ch.to_uppercase()); } else { o.push(ch); } up = ch.is_whitespace(); } o }", "ucfirst": "{ let mut c = s2.chars(); match c.next() { Some(h) => h.to_uppercase().collect::<String>() + c.as_str(), None => String::new() } }"}[x[1]]
                         return "{ let mut s2 = String::new(); { let s = &mut s2; %s } s.push_str(&%s); }" % (_t(x[2]).replace("s.push_str", "s.push_str"), f)
                     if isinstance(x, str):
                         return "s.push_str(%s);" % _rs_str(x)

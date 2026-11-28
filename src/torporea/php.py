@@ -733,6 +733,7 @@ def view_body_nocsrf(tr, pieces, uses_old, uses_err, uses_sess):
 def _blade_layout(root: str, html, depth: int = 0):
     """Expand literal @include('v') and @extends('layout') + @section/@yield at convert time.
     A missing view, data arguments, or nesting deeper than 8 return None (the route stays a 501 TODO)."""
+    import html as _h
     if html is None or depth > 8:
         return None
     def _load(name):
@@ -756,8 +757,20 @@ def _blade_layout(root: str, html, depth: int = 0):
     bad = chr(0) + "BAD" + chr(0)
     def _inc(m):
         v = _blade_layout(root, _load(m.group(2)), depth + 1)
-        return bad if v is None else v
-    html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*\)", _inc, html)
+        if v is None:
+            return bad
+        if m.group(3) is not None:
+            # @include('v', ['k' => 'literal', ...]): literal strings only, substituted into {{ $k }} / {!! $k !!}.
+            data = {}
+            body = m.group(3).strip()
+            for kv in re.finditer(r"'(\w+)'\s*=>\s*'([^'\\]*)'\s*(?:,|$)", body):
+                data[kv.group(1)] = kv.group(2)
+            if re.sub(r"'(\w+)'\s*=>\s*'([^'\\]*)'\s*(?:,|$)", "", body).strip():
+                return bad
+            v = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda q: _h.escape(data[q.group(1)]) if q.group(1) in data else q.group(0), v)
+            v = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda q: data[q.group(1)] if q.group(1) in data else q.group(0), v)
+        return v
+    html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*\[([^\[\]]*)\]\s*)?\)", _inc, html)
     if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include)\b", html)):
         return None
     return html

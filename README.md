@@ -191,3 +191,5 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 with() の入れ子を3段まで(実測済み) / with() nesting up to three levels (measured).
 
 - 2026-11-28 Blade レイアウト(@extends/@section/@yield/@include)対応・実測済み / Blade layouts supported and measured (PORTING.md)
+
+- 2026-11-28 @include のデータ受け渡し(文字列)対応・実測済み / @include with literal data, measured (PORTING.md)

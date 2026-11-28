@@ -688,6 +688,10 @@ def _leaf_rs(tr) -> str:
         if k == "env_if":
             # @env / @production: APP_ENV at run time, "production" when unset (Laravel's default).
             return "if [%s].contains(&std::env::var(\"APP_ENV\").unwrap_or_else(|_| \"production\".to_string()).as_str()) { %s } else { %s }" % (", ".join(_rs_str(x) for x in v[0]), " ".join(piece_old(a, b) for a, b in v[1]), " ".join(piece_old(a, b) for a, b in v[2]))
+        if k in ("env_esc", "env_raw"):
+            # env('X', 'default') read at run time (config values backed by .env)
+            eesc = ".replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\")" if k == "env_esc" else ""
+            return "s.push_str(&std::env::var(%s).unwrap_or_else(|_| %s.to_string())%s);" % (_rs_str(v[0]), _rs_str(v[1]), eesc)
         if k == "sess_esc":
             # session('k', 'default'): the default when nothing was flashed.
             return "s.push_str(&sess.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string())%s);" % (_rs_str(v[0]), _rs_str(v[1]), esc)
@@ -1831,12 +1835,17 @@ def routes(root: str) -> list:
                             if mm.group(2) is not None:
                                 return mm.group(2)
                             return "1" if mm.group(3) == "true" else ""
+                        me = re.search(r"['\"]" + re.escape(key) + r"""['"]\s*=>\s*env\(\s*(['"])(\w+)\1\s*(?:,\s*(?:'((?:[^'\\]|\\.)*)'|(-?\d+)))?\s*\)\s*[,\]]""", src)
+                        if me:
+                            return ("env", me.group(2), (me.group(3) or "").replace("\\'", "'") if me.group(3) is not None else (me.group(4) or ""))
                         if re.search(r"['\"]" + re.escape(key) + r"['\"]\s*=>", src):
                             return None
                     return q.group(4) or ""  # missing key: the default, else null (prints nothing)
                 def _cfgsub(esc):
                     def f(q):
                         v = _cfg(q)
+                        if isinstance(v, tuple):
+                            return ("{{ env('%s', '%s') }}" if esc else "{!! env('%s', '%s') !!}") % (v[1], v[2].replace("'", "\\'"))
                         return q.group(0) if v is None else (_html_esc(v) if esc else v)
                     return f
                 _CFA = r"""config\(\s*(['"])([\w.-]+)\1\s*(?:,\s*(['"])((?:(?!\3).)*)\3\s*)?\)"""
@@ -1872,6 +1881,11 @@ def routes(root: str) -> list:
                     rq.append(("sess_esc", (q.group(2), q.group(4) or "")))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*session\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _sess, html)
+                def _envv(q):
+                    rq.append(("env_esc" if q.group(1) == "{{" else "env_raw", (q.group(3), (q.group(4) or "").replace("\\'", "'"))))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"""(\{\{|\{!!)\s*env\(\s*(['"])(\w+)\2\s*(?:,\s*'((?:[^'\\]|\\.)*)'\s*)?\)\s*(?:\}\}|!!\})""",
+                              lambda q: _envv(q) if (q.group(1) == "{{") == q.group(0).endswith("}}") else q.group(0), html)
                 # @if(session('k')) ... [@else ...] @endif with plain bodies (they may show {{ session('k') }}).
                 def _sessif(q):
                     tok = re.compile(chr(1) + r"RQ(\d+)" + chr(1))
@@ -1902,7 +1916,7 @@ def routes(root: str) -> list:
                         for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), x)):
                             if i % 2:
                                 e = rq[int(seg)]
-                                if e[0] not in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if"):
+                                if e[0] not in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if", "env_esc", "env_raw"):
                                     raise ValueError
                                 out.append(e)
                             elif seg:
@@ -1996,7 +2010,7 @@ def routes(root: str) -> list:
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
                         e = rq[int(seg)]
-                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if") else ("query_esc", e))
+                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if", "env_esc", "env_raw") else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])

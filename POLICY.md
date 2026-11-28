@@ -177,3 +177,4 @@
 - 2026-11-28 trans_choice の数に変数 / Variable counts (113 tests pass)
 - 2026-11-28 翻訳の差し込みに変数 / Variable placeholder values (113 tests pass)
 - 2026-11-28 config() の値 / Config values (113 tests pass)
+- 2026-11-28 env() 由来の config を実行時に / env()-backed config at run time (113 tests pass)

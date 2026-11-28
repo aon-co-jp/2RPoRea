@@ -746,14 +746,28 @@ def _blade_layout(root: str, html, depth: int = 0):
             sec[m.group(2)] = m.group(4)
         for m in re.finditer(r"@section\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@(?:endsection|stop|show)\b", html, re.S):
             sec[m.group(2)] = m.group(3)
+        # @push('x') ... @endpush blocks collect into the layout's @stack('x') in order.
+        pushes = {}
+        for m in re.finditer(r"@push\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@endpush\b", html, re.S):
+            pushes.setdefault(m.group(2), []).append(m.group(3))
         lay = _blade_layout(root, _load(ext.group(2)), depth + 1)
         if lay is None:
             return None
+        # @section('x') default @show in the layout: the child's section replaces it, @parent keeps the default.
+        def _show(m):
+            if m.group(2) in sec:
+                return sec[m.group(2)].replace("@parent", m.group(3))
+            return m.group(3)
+        lay = re.sub(r"@section\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@show\b", _show, lay, flags=re.S)
+        lay = re.sub(r"@stack\(\s*(['\"])([\w.-]+)\1\s*\)", lambda m: "".join(pushes.get(m.group(2), [])), lay)
         html = re.sub(r"@yield\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)",
                       lambda m: sec.get(m.group(2), m.group(4) or ""), lay)
     else:
         # a layout itself: leave @yield for the child, nothing to do when used standalone
         html = re.sub(r"@yield\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)", lambda m: m.group(4) or "", html) if depth == 0 else html
+        if depth == 0:
+            html = re.sub(r"@section\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@show\b", lambda m: m.group(3), html, flags=re.S)
+            html = re.sub(r"@stack\(\s*(['\"])([\w.-]+)\1\s*\)", "", html)
     bad = chr(0) + "BAD" + chr(0)
     def _inc(m):
         v = _blade_layout(root, _load(m.group(2)), depth + 1)
@@ -771,7 +785,7 @@ def _blade_layout(root: str, html, depth: int = 0):
             v = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda q: data[q.group(1)] if q.group(1) in data else q.group(0), v)
         return v
     html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*\[([^\[\]]*)\]\s*)?\)", _inc, html)
-    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include)\b", html)):
+    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|stack|parent|show)\b", html)):
         return None
     return html
 

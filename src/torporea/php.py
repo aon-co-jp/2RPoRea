@@ -1052,8 +1052,8 @@ def routes(root: str) -> list:
                     # @switch($k) @case('v') ... @break ... @default ... @endswitch with a literal scalar: picked at convert time.
                     def _sw(mm):
                         k = mm.group(1)
-                        if not isinstance(data.get(k), str):
-                            return mm.group(0)
+                        if not isinstance(data.get(k), str) or re.search(r"@case\s*\(\s*-?\d", mm.group(2)):
+                            return mm.group(0)  # numeric cases: loose comparison below
                         parts = re.split(r"""@(case\s*\(\s*(?:'([^'\\]*)'|"([^"\\$]*)")\s*\)|default)""", mm.group(2))
                         cases = [(parts[i + 1] if parts[i + 1] is not None else parts[i + 2], parts[i + 3])
                                  for i in range(1, len(parts) - 3, 4)]
@@ -1491,8 +1491,15 @@ def routes(root: str) -> list:
                 # @switch($k) @case('a') ... @break ... @default ... @endswitch over literal data (no nested @switch).
                 def _sw(q):
                     v = data.get(q.group(1))
-                    if not isinstance(v, str):
+                    if isinstance(v, bool) or not isinstance(v, (str, int)):
                         return q.group(0)
+                    v = str(v)
+                    def _same(a, b):
+                        # PHP 8 loose ==: numeric strings compare as numbers, others as strings.
+                        nr = re.compile(r"\s*-?\d+(?:\.\d+)?\s*")
+                        if nr.fullmatch(a) and nr.fullmatch(b):
+                            return float(a) == float(b)
+                        return a == b
                     parts = re.split(r"(@case\(\s*(?:'[^'\\]*'|-?\d+)\s*\)|@default\b)", q.group(2))
                     out, hit = None, False
                     for i in range(1, len(parts), 2):
@@ -1501,7 +1508,7 @@ def routes(root: str) -> list:
                         if lab.startswith("@case"):
                             c = re.search(r"\((.*)\)", lab).group(1).strip()
                             c = c[1:-1] if c.startswith("'") else c
-                            hit = hit or c == v
+                            hit = hit or _same(c, v)
                         else:
                             hit = True
                         if hit:

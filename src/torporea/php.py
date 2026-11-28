@@ -733,6 +733,11 @@ def view_body_nocsrf(tr, pieces, uses_old, uses_err, uses_sess):
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
 
 
+def _html_esc(x):
+    import html as _h
+    return _h.escape(x, quote=True).replace("&#x27;", "&#039;")  # htmlspecialchars(ENT_QUOTES)
+
+
 def _verbatim(html: str) -> str:
     """@verbatim ... @endverbatim: the body is output as written. Its {{, {!! and @ are hidden behind
     placeholders before any Blade processing and restored just before the page is emitted."""
@@ -1736,6 +1741,35 @@ def routes(root: str) -> list:
                         return 'style="%s"' % " ".join(x + ";" for x in out)
                     return 'class="%s"' % " ".join(out)
                 html = re.sub(r"@(class|style)\(\s*\[([^\]]*)\]\s*\)", _cls, html)
+                # {{ __('k') }} / @lang('k') / {{ trans('k') }}: lang/<locale>.json or lang/<locale>/<file>.php (literal
+                # arrays) at convert time; locale from config/app.php, default "en"; unknown keys print the key (Laravel).
+                def _tr(key):
+                    loc = "en"
+                    cf = os.path.join(root, "config", "app.php")
+                    if os.path.exists(cf):
+                        mm = re.search(r"['\"]locale['\"]\s*=>\s*(?:env\(\s*['\"]APP_LOCALE['\"]\s*,\s*)?['\"]([\w-]+)['\"]", open(cf, encoding="utf-8").read())
+                        if mm:
+                            loc = mm.group(1)
+                    for base in (os.path.join(root, "lang"), os.path.join(root, "resources", "lang")):
+                        jf = os.path.join(base, loc + ".json")
+                        if os.path.exists(jf):
+                            try:
+                                d = json.load(open(jf, encoding="utf-8"))
+                                if key in d:
+                                    return d[key]
+                            except ValueError:
+                                pass
+                        if "." in key:
+                            fn, k2 = key.split(".", 1)
+                            pf = os.path.join(base, loc, fn + ".php")
+                            if os.path.exists(pf):
+                                mm = re.search(r"['\"]" + re.escape(k2) + r"['\"]\s*=>\s*'((?:[^'\\]|\\.)*)'", open(pf, encoding="utf-8").read())
+                                if mm:
+                                    return mm.group(1).replace("\\'", "'")
+                    return key
+                html = re.sub(r"\{\{\s*(?:__|trans)\(\s*(['\"])([^'\"]+)\1\s*\)\s*\}\}", lambda q: _html_esc(_tr(q.group(2))), html)
+                html = re.sub(r"\{!!\s*(?:__|trans)\(\s*(['\"])([^'\"]+)\1\s*\)\s*!!\}", lambda q: _tr(q.group(2)), html)
+                html = re.sub(r"@lang\(\s*(['\"])([^'\"]+)\1\s*\)", lambda q: _html_esc(_tr(q.group(2))), html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

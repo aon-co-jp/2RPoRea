@@ -183,3 +183,4 @@
 
 - 2026-11-28 @env・@production 対応(実行時の APP_ENV)・実測済み / @env and @production (APP_ENV at run time), measured (PORTING.md)
 - 2026-11-28 @env の中に Blade の部品 / Blade pieces inside @env (113 tests pass)
+- 2026-11-28 翻訳 __()・@lang・trans() / Translations at convert time (113 tests pass)

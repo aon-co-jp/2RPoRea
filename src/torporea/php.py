@@ -1482,6 +1482,12 @@ def routes(root: str) -> list:
                     t = bool(v) if isinstance(v, (list, dict)) else (isinstance(v, str) and v not in ("", "0"))
                     return q.group(1) if t else ""
                 html = re.sub(r"@(checked|selected|disabled|readonly|required)\(\s*\$(\w+)\s*\)", _attrd, html)
+                def _attrc(q):
+                    ok = _cmp(q.group(2), q.group(3), q.group(4))
+                    if ok is None:
+                        return q.group(0)
+                    return q.group(1) if ok else ""
+                html = re.sub(r"@(checked|selected|disabled|readonly|required)\(\s*((?:[^(){}?'@]|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^(){}?'@]|'[^'\\]*'|\[\s*'\w+'\s*\])+?)\s*\)", _attrc, html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

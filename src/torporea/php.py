@@ -730,6 +730,14 @@ def view_body_nocsrf(tr, pieces, uses_old, uses_err, uses_sess):
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
 
 
+def _verbatim(html: str) -> str:
+    """@verbatim ... @endverbatim: the body is output as written. Its {{, {!! and @ are hidden behind
+    placeholders before any Blade processing and restored just before the page is emitted."""
+    return re.sub(r"@verbatim\b(.*?)@endverbatim\b",
+                  lambda m: m.group(1).replace("{{", "\x00LB\x00").replace("{!!", "\x00LX\x00").replace("@", "\x00AT\x00"),
+                  html, flags=re.S)
+
+
 def _blade_layout(root: str, html, depth: int = 0):
     """Expand literal @include('v') and @extends('layout') + @section/@yield at convert time.
     A missing view, data arguments, or nesting deeper than 8 return None (the route stays a 501 TODO)."""
@@ -896,7 +904,7 @@ def routes(root: str) -> list:
         for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*(?:,\s*\[((?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*)\])?\s*\)", t, re.S):
             full = (prefix + "/" + m.group(2).strip("/")).rstrip("/") or "/"
             vf = os.path.join(root, "resources", "views", *m.group(4).split(".")) + ".blade.php"
-            html = _blade_layout(root, open(vf, encoding="utf-8").read()) if os.path.exists(vf) else None
+            html = _blade_layout(root, _verbatim(open(vf, encoding="utf-8").read())) if os.path.exists(vf) else None
             if html is not None:
                 # Blade comments {{-- ... --}} never reach the output.
                 html = re.sub(r"\{\{--.*?--\}\}", "", html, flags=re.S)
@@ -1846,7 +1854,7 @@ def routes(root: str) -> list:
             if html is not None and ("{{" in html or "{!!" in html or re.search(r"(?m)^\s*@\w", html) or re.search(r"(?<![\w@])@(?:if|elseif|else|endif|isset|endisset|unless|foreach|for|while|php|include|extends|section|yield|csrf|method)\b", html)):
                 html = None
             if html is not None:
-                html = html.replace("\x00LB\x00", "{{")
+                html = html.replace("\x00LB\x00", "{{").replace("\x00LX\x00", "{!!").replace("\x00AT\x00", "@")
             if "{" in full:
                 continue
             tr_v = None

@@ -178,3 +178,5 @@
 - 2026-11-28 @include の関数呼び出しの値に対応・実測済み / @include with function-call values, measured (PORTING.md)
 
 - 2026-11-28 入れ子の関数を配列の参照に・@include の値にも対応・実測済み / nested functions over array lookups, in views and @include, measured (PORTING.md)
+
+- 2026-11-28 @verbatim 対応・実測済み / @verbatim, measured (PORTING.md)

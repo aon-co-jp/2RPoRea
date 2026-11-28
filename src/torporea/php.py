@@ -1767,9 +1767,25 @@ def routes(root: str) -> list:
                                 if mm:
                                     return mm.group(1).replace("\\'", "'")
                     return key
-                html = re.sub(r"\{\{\s*(?:__|trans)\(\s*(['\"])([^'\"]+)\1\s*\)\s*\}\}", lambda q: _html_esc(_tr(q.group(2))), html)
-                html = re.sub(r"\{!!\s*(?:__|trans)\(\s*(['\"])([^'\"]+)\1\s*\)\s*!!\}", lambda q: _tr(q.group(2)), html)
-                html = re.sub(r"@lang\(\s*(['\"])([^'\"]+)\1\s*\)", lambda q: _html_esc(_tr(q.group(2))), html)
+                def _trr(q):
+                    # optional literal replacements: __('k', ['name' => 'Taro']) -> :name, :Name, :NAME (Laravel)
+                    t = _tr(q.group(2))
+                    if q.group(3) is not None:
+                        pairs = re.findall(r"""(['"])(\w+)\1\s*=>\s*(['"])((?:(?!\3).)*)\3""", q.group(3))
+                        if len(pairs) != len([x for x in q.group(3).split(",") if x.strip()]):
+                            return None
+                        for _a, k, _b, v in sorted(pairs, key=lambda z: -len(z[1])):
+                            t = t.replace(":" + k.upper(), v.upper()).replace(":" + k[:1].upper() + k[1:], v[:1].upper() + v[1:]).replace(":" + k, v)
+                    return t
+                _TRA = r"""(['"])([^'"]+)\1\s*(?:,\s*\[([^\]]*)\]\s*)?\)"""
+                def _trsub(pat, esc):
+                    def f(q):
+                        t = _trr(q)
+                        return q.group(0) if t is None else (_html_esc(t) if esc else t)
+                    return lambda h: re.sub(pat, f, h)
+                html = _trsub(r"\{\{\s*(?:__|trans)\(\s*" + _TRA + r"\s*\}\}", True)(html)
+                html = _trsub(r"\{!!\s*(?:__|trans)\(\s*" + _TRA + r"\s*!!\}", False)(html)
+                html = _trsub(r"@lang\(\s*" + _TRA, True)(html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

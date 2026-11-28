@@ -153,3 +153,4 @@
 - 2026-11-28 検証ルール12種を追加(実測済み)、unique/existsはDB層待ち / 12 more validation rules (measured); unique/exists await a DB layer.
 - 2026-11-28 with() に ucwords/lcfirst/strrev/ltrim/rtrim(実測済み) / more with() functions (measured).
 - 2026-11-28 with() の関数を2段まで入れ子に(実測済み)。再開メッセージは PORTING.md 末尾 / nested with() functions (measured); resume message at the end of PORTING.md.
+- 2026-11-28 with() の入れ子を3段まで(実測済み) / with() nesting up to three levels (measured).

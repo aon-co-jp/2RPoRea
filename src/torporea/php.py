@@ -1516,7 +1516,13 @@ def routes(root: str) -> list:
                     for e in [x.strip() for x in q.group(2).split(",") if x.strip()]:
                         m = re.fullmatch(r"'([^'\\]*)'(?:\s*=>\s*(?:\$(\w+)|(true|false)))?", e)
                         if not m:
-                            return q.group(0)
+                            cm = re.fullmatch(r"'([^'\\]*)'\s*=>\s*(.+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*(.+)", e)
+                            ok = _cmp(cm.group(2), cm.group(3), cm.group(4)) if cm else None
+                            if ok is None:
+                                return q.group(0)
+                            if ok:
+                                out.append(cm.group(1).rstrip(";") if q.group(1) == "style" else cm.group(1))
+                            continue
                         if m.group(2):
                             if m.group(2) not in data:
                                 return q.group(0)

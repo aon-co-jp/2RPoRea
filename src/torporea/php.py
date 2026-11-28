@@ -1993,15 +1993,37 @@ def _uses_input(tr) -> bool:
 
 def render_main(rts: list) -> str:
     fns, ats, by_path = [], [], {}
+    def _web(path):
+        return not (path == "/api" or path.startswith("/api/"))
+    # Laravel method spoofing: a form POST with _method=PUT/PATCH/DELETE runs that route's handler (web routes only).
+    spoof = {}
+    for meth, path, params, tr, src in rts:
+        if meth in ("PUT", "PATCH", "DELETE") and tr is not None and _web(path):
+            spoof.setdefault(path, {}).setdefault(meth, _leaf_rs(tr))
+    rts = list(rts)
+    for path in spoof:
+        if not any(m == "POST" and p == path for m, p, *_ in rts):
+            rts.append(("POST", path, [], ("__405__",), "(method spoofing)"))
+    def _dispatch(path):
+        arms = " ".join("Some(%s) => return { %s }," % (_rs_str(m), core) for m, core in spoof[path].items())
+        return "match input.get(\"_method\").and_then(|v| v.as_str()).map(|m| m.to_ascii_uppercase()).as_deref() { %s _ => {} }" % arms + chr(10) + "    "
     for i, (meth, path, params, tr, src) in enumerate(rts):
         name = "h%d" % i
-        if tr is None:
+        disp = meth == "POST" and path in spoof
+        if tr is None and not disp:
             msg = "TODO: port %s %s from %s (Laravel)" % (meth, path, src)
             body = "hyper_compat::text_response(StatusCode::NOT_IMPLEMENTED, \"text/plain; charset=utf-8\", %s)" % _rs_str(msg)
         else:
-            body = _leaf_rs(tr)
-            web_write = meth in ("POST", "PUT", "PATCH", "DELETE") and not (path == "/api" or path.startswith("/api/"))
-            if _uses_input(tr) or web_write:
+            if tr is None:
+                body = "hyper_compat::text_response(StatusCode::NOT_IMPLEMENTED, \"text/plain; charset=utf-8\", %s)" % _rs_str("TODO: port %s %s from %s (Laravel)" % (meth, path, src))
+            elif tr == ("__405__",):
+                body = "hyper_compat::text_response(StatusCode::METHOD_NOT_ALLOWED, \"text/plain; charset=utf-8\", \"405 | Method Not Allowed\")"
+            else:
+                body = _leaf_rs(tr)
+            if disp:
+                body = _dispatch(path) + body
+            web_write = meth in ("POST", "PUT", "PATCH", "DELETE") and _web(path)
+            if disp or (tr not in (None, ("__405__",)) and _uses_input(tr)) or web_write:
                 body = "let input = read_input(req).await;"+chr(10)+"    " + body
             if web_write:
                 # Laravel VerifyCsrfToken on web routes: _token (body) or X-CSRF-TOKEN must equal the rporea_csrf cookie, else 419.

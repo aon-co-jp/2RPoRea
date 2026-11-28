@@ -685,6 +685,9 @@ def _leaf_rs(tr) -> str:
         if k == "sess_if":
             # PHP truthiness of the flashed value: missing, "", "0" are false.
             return "if sess.get(%s).is_some_and(|v| match v { serde_json::Value::String(t) => !t.is_empty() && t != \"0\", serde_json::Value::Null => false, serde_json::Value::Bool(b) => *b, _ => true }) { %s } else { %s }" % (_rs_str(v[0]), " ".join(piece_old(a, b) for a, b in v[1]), " ".join(piece_old(a, b) for a, b in v[2]))
+        if k == "env_if":
+            # @env / @production: APP_ENV at run time, "production" when unset (Laravel's default).
+            return "if [%s].contains(&std::env::var(\"APP_ENV\").unwrap_or_else(|_| \"production\".to_string()).as_str()) { %s } else { %s }" % (", ".join(_rs_str(x) for x in v[0]), " ".join(piece_old(a, b) for a, b in v[1]), " ".join(piece_old(a, b) for a, b in v[2]))
         if k == "sess_esc":
             # session('k', 'default'): the default when nothing was flashed.
             return "s.push_str(&sess.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string())%s);" % (_rs_str(v[0]), _rs_str(v[1]), esc)
@@ -703,7 +706,7 @@ def _leaf_rs(tr) -> str:
     def _kinds(ps):
         for k, v in ps:
             yield k
-            if k in ("err_if", "sess_if"):
+            if k in ("err_if", "sess_if", "env_if"):
                 yield from _kinds(v[1])
                 yield from _kinds(v[2])
     kinds = set(_kinds(tr[1]))
@@ -1785,6 +1788,20 @@ def routes(root: str) -> list:
                         return q.group(0)
                     rq.append(("sess_if", (q.group(2), tp, op)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                # @env('local') / @env(['a', 'b']) / @production ... [@else ...] @endenv / @endproduction (plain text bodies)
+                def _envif(q):
+                    def _lits(x):
+                        if "{{" in x or "{!!" in x or re.search(r"(?<![\w@])@\w", x) or chr(1) in x:
+                            raise ValueError
+                        return [("lit", x)] if x else []
+                    try:
+                        tp, op = _lits(q.group(3)), _lits(q.group(4) or "")
+                    except ValueError:
+                        return q.group(0)
+                    envs = ["production"] if q.group(1) == "production" else re.findall(r"['\"]([\w.-]+)['\"]", q.group(2))
+                    rq.append(("env_if", (envs, tp, op)))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"@(env|production)\b(?:\s*\(\s*(\[[^\]]*\]|['\"][\w.-]+['\"])\s*\))?((?:(?!@(?:env|production|else|endenv|endproduction)\b).)*?)(?:@else((?:(?!@(?:endenv|endproduction)\b).)*?))?@end(?:env|production)\b", _envif, html, flags=re.S)
                 html = re.sub(r"@if\s*\(\s*session\(\s*(['\"])([\w.-]+)\1\s*\)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _sessif, html, flags=re.S)
                 def _errf(q):
                     rq.append(("err_first", q.group(2)))
@@ -1863,7 +1880,7 @@ def routes(root: str) -> list:
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
                         e = rq[int(seg)]
-                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf") else ("query_esc", e))
+                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if") else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])

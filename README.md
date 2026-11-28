@@ -215,3 +215,5 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 入れ子の関数を配列の参照に・@include の値にも対応・実測済み / nested functions over array lookups, in views and @include, measured (PORTING.md)
 
 - 2026-11-28 @verbatim 対応・実測済み / @verbatim, measured (PORTING.md)
+
+- 2026-11-28 @env・@production 対応(実行時の APP_ENV)・実測済み / @env and @production (APP_ENV at run time), measured (PORTING.md)

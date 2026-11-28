@@ -232,3 +232,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 時間帯の残りを実測 / Remaining timezone checks measured
 - 2026-11-28 日付の書式文字を追加 / More date format letters (113 tests pass)
 - 2026-11-28 now() の year/month/day/hour/dayOfWeek / Carbon properties (113 tests pass)
+- 2026-11-28 now()->minute/second / Minute and second (113 tests pass)

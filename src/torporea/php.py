@@ -709,7 +709,7 @@ def _leaf_rs(tr) -> str:
                              "N": 's.push_str(&(if wd == 0 { 7 } else { wd }).to_string());', "w": 's.push_str(&wd.to_string());',
                              "M": 's.push_str(&MN[(mon - 1) as usize][..3]);', "F": 's.push_str(MN[(mon - 1) as usize]);',
                              "g": 's.push_str(&h12.to_string());', "h": 's.push_str(&format!("{:02}", h12));',
-                             "A": 's.push_str(if hh < 12 { "AM" } else { "PM" });', "a": 's.push_str(if hh < 12 { "am" } else { "pm" });'}.get(ch, "s.push_str(%s);" % _rs_str(_html_esc(ch))))
+                             "A": 's.push_str(if hh < 12 { "AM" } else { "PM" });', "\u00b5": 's.push_str(&mi.to_string());', "\u00b6": 's.push_str(&ss.to_string());', "a": 's.push_str(if hh < 12 { "am" } else { "pm" });'}.get(ch, "s.push_str(%s);" % _rs_str(_html_esc(ch))))
             return " ".join(code) + " }"
         if k in ("env_esc", "env_raw"):
             # env('X', 'default') read at run time (config values backed by .env)
@@ -1969,8 +1969,8 @@ def routes(root: str) -> list:
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"""\{\{\s*date\(\s*(['"])([YymndjHGisDlNwMFghAa:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
                 # Carbon properties: now()->year / month / day / hour / dayOfWeek (unpadded integers)
-                _CP = {"year": "Y", "month": "n", "day": "j", "hour": "G", "dayOfWeek": "w"}
-                html = re.sub(r"\{\{\s*now\(\)\s*->\s*(year|month|day|hour|dayOfWeek)\s*\}\}", lambda q: _date(q, _CP[q.group(1)]), html)
+                _CP = {"year": "Y", "month": "n", "day": "j", "hour": "G", "dayOfWeek": "w", "minute": "\u00b5", "second": "\u00b6"}  # internal unpadded minute/second
+                html = re.sub(r"\{\{\s*now\(\)\s*->\s*(year|month|day|hour|dayOfWeek|minute|second)\s*\}\}", lambda q: _date(q, _CP[q.group(1)]), html)
                 html = re.sub(r"""\{\{\s*now\(\)\s*->\s*format\(\s*(['"])([YymndjHGisDlNwMFghAa:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
                 def _envv(q):
                     rq.append(("env_esc" if q.group(1) == "{{" else "env_raw", (q.group(3), (q.group(4) or "").replace("\\'", "'"))))

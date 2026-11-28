@@ -170,3 +170,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28: validate() に alpha・alpha_num・in・between / more validate() rules (see PORTING.md).
 - 2026-11-28: @session ディレクティブ / @session directive (see PORTING.md).
 - 2026-11-28: with() に文字列関数 / string functions in with() (see PORTING.md).
+- 2026-11-28: strtolower 実測 / strtolower measured (see PORTING.md).

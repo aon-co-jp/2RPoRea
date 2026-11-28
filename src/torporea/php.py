@@ -683,6 +683,8 @@ def _leaf_rs(tr) -> str:
         if k == "sess_esc":
             # session('k', 'default'): the default when nothing was flashed.
             return "s.push_str(&sess.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string())%s);" % (_rs_str(v[0]), _rs_str(v[1]), esc)
+        if k == "csrf":
+            return "s.push_str(&csrf_tok);"
         if k == "err_all":
             inner = " ".join("s.push_str(%s);" % _rs_str(x) if kk == "lit" else "s.push_str(&message%s);" % esc for kk, x in v)
             return "for message in errs_all(&errs) { %s }" % inner
@@ -703,6 +705,15 @@ def _leaf_rs(tr) -> str:
     uses_old = "old_esc" in kinds
     uses_err = bool(kinds & {"err_first", "err_blk", "err_all", "err_if"})
     uses_sess = bool(kinds & {"sess_esc", "sess_if"})
+    if "csrf" in kinds:
+        # Laravel csrf_token(): stable per browser; a new one is issued in the rporea_csrf cookie when missing.
+        body = "{ let (csrf_tok, csrf_new) = csrf_token(&req); %s }"
+        inner = view_body_nocsrf(tr, pieces, uses_old, uses_err, uses_sess)
+        return "{ let (csrf_tok, csrf_new) = csrf_token(&req); " + inner.replace("hyper_compat::html_response(StatusCode::OK, s)", "{ let mut r0 = hyper_compat::html_response(StatusCode::OK, s); if csrf_new { r0.headers_mut().append(\"set-cookie\", format!(\"rporea_csrf={csrf_tok}; Path=/; HttpOnly; SameSite=Lax\").parse().unwrap()); } r0 }", 1) + " }"
+    return view_body_nocsrf(tr, pieces, uses_old, uses_err, uses_sess)
+
+
+def view_body_nocsrf(tr, pieces, uses_old, uses_err, uses_sess):
     if uses_sess:
         # session('k'): the value flashed by ->with('k', 'v') on the previous request (one request only).
         pieces.insert(0, "let sess = flashed(&req, \"rporea_flash\");")
@@ -1600,6 +1611,11 @@ def routes(root: str) -> list:
                     rq.append(("err_first", q.group(2)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*\$errors\s*->\s*first\(\s*(['\"])([\w.-]+)\1\s*\)\s*\}\}", _errf, html)
+                # @csrf: the hidden _token field with the per-browser token (rporea_csrf cookie, made on first use).
+                def _csrf(q):
+                    rq.append(("csrf", ""))
+                    return '<input type="hidden" name="_token" value="%sRQ%d%s" autocomplete="off">' % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"@csrf\b", _csrf, html)
                 def _errb(q):
                     body = q.group(3)
                     segs = re.split(r"\{\{\s*\$message\s*\}\}", body)
@@ -1668,7 +1684,7 @@ def routes(root: str) -> list:
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
                         e = rq[int(seg)]
-                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if") else ("query_esc", e))
+                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf") else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])
@@ -1886,6 +1902,18 @@ fn errs_all(errs: &[(String, Vec<String>)]) -> Vec<String> {
     errs.iter().flat_map(|(_, m)| m.iter().cloned()).collect()
 }
 
+/// Laravel `csrf_token()`: the token from the rporea_csrf cookie, or a fresh random 40-character one (true when new).
+fn csrf_token(req: &Request) -> (String, bool) {
+    let old = req.headers().get_all("cookie").iter().filter_map(|h| h.to_str().ok()).flat_map(|h| h.split(';')).find_map(|c| c.trim().strip_prefix("rporea_csrf=").map(|v| v.to_string()));
+    if let Some(t) = old.filter(|t| t.len() == 40 && t.bytes().all(|b| b.is_ascii_alphanumeric())) {
+        return (t, false);
+    }
+    const A: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut b = [0u8; 40];
+    getrandom::getrandom(&mut b).expect("OS random source");
+    (b.iter().map(|x| A[(*x as usize) % A.len()] as char).collect(), true)
+}
+
 fn err_first(errs: &[(String, Vec<String>)], k: &str) -> String {
     errs_get(errs, k).unwrap_or_default()
 }
@@ -1982,7 +2010,7 @@ def write(root: str, out: str, rpoem_path: str = "F:/RPoem") -> dict:
         f.write('[package]\nname = "php-ported"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\n'
                 'open-runo-poem-compat = { path = "%s/crates/open-runo-poem-compat" }\n'
                 'open-runo-poem-compat-macro = { path = "%s/crates/open-runo-poem-compat-macro" }\n'
-                'http-body-util = "0.1"\nserde_json = "1"\ntokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }\n' % (rp, rp))
+                'getrandom = "0.2"\nhttp-body-util = "0.1"\nserde_json = "1"\ntokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }\n' % (rp, rp))
     with open(os.path.join(out, "src", "main.rs"), "w", encoding="utf-8", newline="\n") as f:
         f.write(render_main(rts))
     done = sum(1 for r in rts if r[3] is not None)

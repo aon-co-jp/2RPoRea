@@ -1830,15 +1830,50 @@ def routes(root: str) -> list:
                         src = open(cf, encoding="utf-8").read()
                         # nested keys (a.b.c): narrow src to the balanced [ ... ] of each parent key
                         *parents, key = key.split(".")
+                        def _top(x):
+                            # same length; text inside nested [ ... ] (outside quotes) blanked, so keys match at this level only
+                            out, d, qch, bs = [], 0, None, False
+                            for ch in x:
+                                if qch:
+                                    out.append(ch if d <= 0 else " ")
+                                    if bs:
+                                        bs = False
+                                    elif ch == "\\":
+                                        bs = True
+                                    elif ch == qch:
+                                        qch = None
+                                    continue
+                                if ch in "'\"":
+                                    qch = ch
+                                if ch == "]":
+                                    d -= 1
+                                out.append(ch if d <= 0 else " ")
+                                if ch == "[":
+                                    d += 1
+                            return "".join(out)
+                        # the file's own `return [ ... ]` is the top level
+                        mr = re.search(r"return\s*\[", src)
+                        if mr:
+                            src = src[mr.end():]
                         for pk in parents:
-                            mp = re.search(r"['\"]" + re.escape(pk) + r"['\"]\s*=>\s*\[", src)
+                            mp = re.search(r"['\"]" + re.escape(pk) + r"['\"]\s*=>\s*\[", _top(src))
                             if not mp:
                                 return q.group(4) or ""
-                            depth, i = 1, mp.end()
+                            depth, i, qch = 1, mp.end(), None
                             while i < len(src) and depth:
-                                depth += {"[": 1, "]": -1}.get(src[i], 0)
+                                ch = src[i]
+                                if qch:
+                                    if ch == "\\":
+                                        i += 1
+                                    elif ch == qch:
+                                        qch = None
+                                elif ch in "'\"":
+                                    qch = ch
+                                else:
+                                    depth += {"[": 1, "]": -1}.get(ch, 0)
                                 i += 1
                             src = src[mp.end():i - 1] + ","
+                        src = _top(src)
                         mm = re.search(r"['\"]" + re.escape(key) + r"['\"]\s*=>\s*(?:'((?:[^'\\]|\\.)*)'|(-?\d+(?:\.\d+)?)|(true|false))\s*[,\]]", src)
                         if mm:
                             if mm.group(1) is not None:

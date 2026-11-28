@@ -730,6 +730,39 @@ def view_body_nocsrf(tr, pieces, uses_old, uses_err, uses_sess):
     return "{ let mut s = String::new(); %s hyper_compat::html_response(StatusCode::OK, s) }" % " ".join(pieces)
 
 
+def _blade_layout(root: str, html, depth: int = 0):
+    """Expand literal @include('v') and @extends('layout') + @section/@yield at convert time.
+    A missing view, data arguments, or nesting deeper than 8 return None (the route stays a 501 TODO)."""
+    if html is None or depth > 8:
+        return None
+    def _load(name):
+        f = os.path.join(root, "resources", "views", *name.split(".")) + ".blade.php"
+        return open(f, encoding="utf-8").read() if os.path.exists(f) else None
+    ext = re.search(r"@extends\(\s*(['\"])([\w.-]+)\1\s*\)", html)
+    if ext:
+        sec = {}
+        for m in re.finditer(r"@section\(\s*(['\"])([\w.-]+)\1\s*,\s*(['\"])([^'\"]*)\3\s*\)", html):
+            sec[m.group(2)] = m.group(4)
+        for m in re.finditer(r"@section\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@(?:endsection|stop|show)\b", html, re.S):
+            sec[m.group(2)] = m.group(3)
+        lay = _blade_layout(root, _load(ext.group(2)), depth + 1)
+        if lay is None:
+            return None
+        html = re.sub(r"@yield\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)",
+                      lambda m: sec.get(m.group(2), m.group(4) or ""), lay)
+    else:
+        # a layout itself: leave @yield for the child, nothing to do when used standalone
+        html = re.sub(r"@yield\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)", lambda m: m.group(4) or "", html) if depth == 0 else html
+    bad = chr(0) + "BAD" + chr(0)
+    def _inc(m):
+        v = _blade_layout(root, _load(m.group(2)), depth + 1)
+        return bad if v is None else v
+    html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*\)", _inc, html)
+    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include)\b", html)):
+        return None
+    return html
+
+
 def routes(root: str) -> list:
     """[(METHOD, path, params, translation-or-None, source-file)]"""
     out, names = [], {}
@@ -746,7 +779,7 @@ def routes(root: str) -> list:
         for m in re.finditer(r"Route::view\s*\(\s*(['\"])(.*?)\1\s*,\s*(['\"])([\w.-]+)\3\s*(?:,\s*\[((?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*)\])?\s*\)", t, re.S):
             full = (prefix + "/" + m.group(2).strip("/")).rstrip("/") or "/"
             vf = os.path.join(root, "resources", "views", *m.group(4).split(".")) + ".blade.php"
-            html = open(vf, encoding="utf-8").read() if os.path.exists(vf) else None
+            html = _blade_layout(root, open(vf, encoding="utf-8").read()) if os.path.exists(vf) else None
             if html is not None:
                 # Blade comments {{-- ... --}} never reach the output.
                 html = re.sub(r"\{\{--.*?--\}\}", "", html, flags=re.S)

@@ -418,7 +418,7 @@ def translate(body: str, params: list):
         out = []
         for k, v in rules.items():
             rs = v.split("|") if isinstance(v, str) else v
-            if not isinstance(rs, list) or not all(isinstance(r, str) and re.fullmatch(r"required|string|numeric|integer|nullable|email|confirmed|(?:min|max):\d+", r) for r in rs):
+            if not isinstance(rs, list) or not all(isinstance(r, str) and re.fullmatch(r"required|string|numeric|integer|nullable|email|confirmed|alpha|alpha_num|(?:min|max):\d+|between:\d+,\d+|in:[\w.-]+(?:,[\w.-]+)*", r) for r in rs):
                 return None
             out.append((k, rs))
         inner = translate(b[vm.end():], params)
@@ -1738,6 +1738,14 @@ fn validate_field(input: &std::collections::HashMap<String, serde_json::Value>, 
         if *r == "email" && !{ let mut sp = t.splitn(2, '@'); let (a, d) = (sp.next().unwrap_or(""), sp.next().unwrap_or("")); !a.is_empty() && !d.is_empty() && !d.contains('@') && !t.chars().any(|c| c.is_whitespace()) } { out.push(format!("The {label} field must be a valid email address.")); }
         if *r == "confirmed" && input.get(&format!("{key}_confirmation")).and_then(|v| v.as_str()).map(|c| c.trim()) != Some(t.as_str()) { out.push(format!("The {label} field confirmation does not match.")); }
         let unit = if by_num { "" } else { " characters" };
+        if *r == "alpha" && !t.chars().all(|c| c.is_alphabetic()) { out.push(format!("The {label} field must only contain letters.")); }
+        if *r == "alpha_num" && !t.chars().all(|c| c.is_alphanumeric()) { out.push(format!("The {label} field must only contain letters and numbers.")); }
+        if let Some(list) = r.strip_prefix("in:") {
+            if !list.split(',').any(|x| x == t) { out.push(format!("The selected {label} is invalid.")); }
+        }
+        if let Some((a, b)) = r.strip_prefix("between:").and_then(|x| x.split_once(',')) {
+            if size < a.parse::<f64>().unwrap_or(0.0) || size > b.parse::<f64>().unwrap_or(0.0) { out.push(format!("The {label} field must be between {a} and {b}{unit}.")); }
+        }
         if let Some(n) = r.strip_prefix("min:") {
             if size < n.parse::<f64>().unwrap_or(0.0) { out.push(format!("The {label} field must be at least {n}{unit}.")); }
         }

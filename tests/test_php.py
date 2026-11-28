@@ -889,3 +889,9 @@ def test_with_concatenation():
     from torporea import php
     tr = php.translate("return back()->with('s', 'Item ' . $id . ' by ' . $request->input('n'));", ["id"])
     assert tr[1] == [("s", ("cat", ["Item ", ("param", "id"), " by ", ("in", "n")]))] and php._uses_input(tr)
+
+
+def test_validate_more_rules():
+    from torporea import php
+    tr = php.translate("$request->validate(['c' => 'alpha_num|between:3,5', 'k' => 'in:a,b']); return 'ok';", [])
+    assert tr[1] == [("c", ["alpha_num", "between:3,5"]), ("k", ["in:a,b"])]

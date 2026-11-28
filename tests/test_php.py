@@ -902,3 +902,10 @@ def test_session_directive(tmp_path):
     from torporea import php
     src = open(php.__file__, encoding="utf-8").read()
     assert "@endsession" in src
+
+
+def test_with_string_functions():
+    from torporea import php
+    tr = php.translate("return back()->with('s', strtoupper($request->input('n')) . '-' . ucfirst($id));", ["id"])
+    assert tr[1][0][1] == ("cat", [("fn", "strtoupper", ("in", "n")), "-", ("fn", "ucfirst", ("param", "id"))])
+    assert php._uses_input(tr)

@@ -229,3 +229,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 config の鍵は同じ階層だけで探す / Config keys match at their own level (113 tests pass)
 - 2026-11-28 日付 date()・now() / Dates at run time (113 tests pass)
 - 2026-11-28 日付に app の時間帯 / App timezone for dates (113 tests pass)
+- 2026-11-28 時間帯の残りを実測 / Remaining timezone checks measured

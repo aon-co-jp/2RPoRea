@@ -662,7 +662,8 @@ def _leaf_rs(tr) -> str:
             # PHP truthiness of the flashed value: missing, "", "0" are false.
             return "if sess.get(%s).is_some_and(|v| match v { serde_json::Value::String(t) => !t.is_empty() && t != \"0\", serde_json::Value::Null => false, serde_json::Value::Bool(b) => *b, _ => true }) { %s } else { %s }" % (_rs_str(v[0]), " ".join(piece_old(a, b) for a, b in v[1]), " ".join(piece_old(a, b) for a, b in v[2]))
         if k == "sess_esc":
-            return "s.push_str(&sess.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_default()%s);" % (_rs_str(v), esc)
+            # session('k', 'default'): the default when nothing was flashed.
+            return "s.push_str(&sess.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), o => o.to_string() }).unwrap_or_else(|| %s.to_string())%s);" % (_rs_str(v[0]), _rs_str(v[1]), esc)
         if k == "err_all":
             inner = " ".join("s.push_str(%s);" % _rs_str(x) if kk == "lit" else "s.push_str(&message%s);" % esc for kk, x in v)
             return "for message in errs_all(&errs) { %s }" % inner
@@ -1468,9 +1469,9 @@ def routes(root: str) -> list:
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*old\(\s*(['\"])(\w+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _old, html)
                 def _sess(q):
-                    rq.append(("sess_esc", q.group(2)))
+                    rq.append(("sess_esc", (q.group(2), q.group(4) or "")))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
-                html = re.sub(r"\{\{\s*session\(\s*(['\"])([\w.-]+)\1\s*\)\s*\}\}", _sess, html)
+                html = re.sub(r"\{\{\s*session\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _sess, html)
                 # @if(session('k')) ... [@else ...] @endif with plain bodies (they may show {{ session('k') }}).
                 def _sessif(q):
                     tok = re.compile(chr(1) + r"RQ(\d+)" + chr(1))

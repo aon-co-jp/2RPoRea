@@ -187,3 +187,4 @@
 - 2026-11-28 翻訳の :name 差し込み / Translation placeholders (113 tests pass)
 - 2026-11-28 trans_choice・@choice / Pluralization (113 tests pass)
 - 2026-11-28 trans_choice の数に変数 / Variable counts (113 tests pass)
+- 2026-11-28 翻訳の差し込みに変数 / Variable placeholder values (113 tests pass)

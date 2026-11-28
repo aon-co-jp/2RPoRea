@@ -1771,7 +1771,14 @@ def routes(root: str) -> list:
                     # optional literal replacements: __('k', ['name' => 'Taro']) -> :name, :Name, :NAME (Laravel)
                     t = _tr(q.group(2))
                     if q.group(3) is not None:
-                        pairs = re.findall(r"""(['"])(\w+)\1\s*=>\s*(['"])((?:(?!\3).)*)\3""", q.group(3))
+                        pairs = []
+                        for a, k, _b, lit, var in re.findall(r"""(['"])(\w+)\1\s*=>\s*(?:(['"])((?:(?!\3).)*)\3|\$(\w+))""", q.group(3)):
+                            if var:
+                                lit = data.get(var)
+                                if isinstance(lit, bool) or not isinstance(lit, (str, int, float)):
+                                    return None
+                                lit = str(lit)
+                            pairs.append((a, k, _b, lit))
                         if len(pairs) != len([x for x in q.group(3).split(",") if x.strip()]):
                             return None
                         for _a, k, _b, v in sorted(pairs, key=lambda z: -len(z[1])):

@@ -823,7 +823,10 @@ def _blade_layout(root: str, html, depth: int = 0):
             # value: a literal string, or $var with optional ['key'] / [0] lookups (e.g. $u['name'])
             # or one string function around such a value (e.g. ucfirst($u['name'])).
             _lk = r"\$\w+(?:\[(?:'[\w-]*'|\d+)\])*"
-            pair = (r"'(\w+)'\s*=>\s*(?:'([^'\\]*)'|(" + _lk + r"|(?:strtoupper|strtolower|ucfirst|ucwords|lcfirst|trim|strrev)\(\s*" + _lk + r"\s*\)))\s*(?:,|$)")
+            _fx = _lk
+            for _ in range(3):  # up to 3 nested string functions, e.g. strrev(strtoupper(trim($x)))
+                _fx = r"(?:strtoupper|strtolower|ucfirst|ucwords|lcfirst|trim|strrev)\(\s*(?:" + _fx + r")\s*\)|" + _lk
+            pair = (r"'(\w+)'\s*=>\s*(?:'([^'\\]*)'|(" + _fx + r"))\s*(?:,|$)")
             for kv in re.finditer(pair, body):
                 if kv.group(3) is not None:
                     ren[kv.group(1)] = kv.group(3)
@@ -1375,12 +1378,26 @@ def routes(root: str) -> list:
                         return q.group(0)
                     return _h2.escape(r)
                 html = re.sub(r"\{\{\s*(\w+)\s*\(([^(){}]*,[^(){}]*|\s*(?:\$\w+|'[^'\\]*'|-?\d+)\s*)\)\s*\}\}", _fnargs, html)
+                class _FnM:
+                    # regroup: 1 = calls, 2 = var, 3 = closing parens, 4 = lookups (kept stable for _fn)
+                    def __init__(self, m):
+                        self.m = m
+                    def group(self, i):
+                        return self.m.group({0: 0, 1: 1, 2: 2, 3: 4, 4: 3}[i])
                 def _fn(q):
                     # nested calls apply innermost first: {{ ucfirst(trim($k)) }}
                     fs = re.findall(r"(\w+)\s*\(", q.group(1))
                     if len(fs) != q.group(3).count(")"):
                         return q.group(0)
                     val = data.get(q.group(2))
+                    # optional lookups: {{ strrev(strtoupper(trim($u['name']))) }}
+                    for key in re.findall(r"\[(?:'([\w-]*)'|(\d+))\]", q.group(4) or ""):
+                        if key[1] and isinstance(val, list) and int(key[1]) < len(val):
+                            val = val[int(key[1])]
+                        elif key[0] and isinstance(val, dict) and key[0] in val:
+                            val = val[key[0]]
+                        else:
+                            return q.group(0)
                     for f in reversed(fs):
                         if f == "count" and isinstance(val, list):
                             val = str(len(val))
@@ -1391,8 +1408,10 @@ def routes(root: str) -> list:
                                 return q.group(0)
                         else:
                             return q.group(0)
+                    if not isinstance(val, str):
+                        return q.group(0)
                     return _h2.escape(val)
-                html = re.sub(r"\{\{\s*((?:\w+\s*\(\s*)+)\$(\w+)\s*((?:\)\s*)+)\}\}", _fn, html)
+                html = re.sub(r"\{\{\s*((?:\w+\s*\(\s*)+)\$(\w+)((?:\[(?:'[\w-]*'|\d+)\])*)\s*((?:\)\s*)+)\}\}", lambda q: _fn(_FnM(q)), html)
                 # one-argument string functions over a literal or an item ($xs[0] / $u['k']): {{ strlen('abc') }}, {{ strtoupper($xs[0]) }}
                 def _fn1(q):
                     f, arg = q.group(1), q.group(2).strip()

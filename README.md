@@ -181,3 +181,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 ビューデータの入れ子配列・整数に対応(実測一致) / nested arrays and integers in view data (measured).
 - 2026-11-28 `@switch` の数値 `@case` に対応・既存の不具合修正(実測一致) / numeric `@case` and a fix (measured).
 - 2026-11-28 `@csrf` を変換(トークン発行・再利用を実測、POST 検証は未了) / `@csrf` converted (issue/reuse measured; POST check open).
+- 2026-11-28 CSRF 照合(不一致で419、`RPOREA_CSRF=0` で無効)を実装・実測 / CSRF verification (419; `RPOREA_CSRF=0` disables), measured.

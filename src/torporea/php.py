@@ -1902,6 +1902,25 @@ fn errs_all(errs: &[(String, Vec<String>)]) -> Vec<String> {
     errs.iter().flat_map(|(_, m)| m.iter().cloned()).collect()
 }
 
+/// The named cookie's value, if sent.
+fn cookie_value(req: &Request, name: &str) -> Option<String> {
+    let pre = format!("{name}=");
+    req.headers().get_all("cookie").iter().filter_map(|h| h.to_str().ok()).flat_map(|h| h.split(';')).find_map(|c| c.trim().strip_prefix(pre.as_str()).map(|v| v.to_string()))
+}
+
+/// Laravel VerifyCsrfToken: 419 "Page Expired" unless the submitted token equals the cookie token (compared in constant time).
+fn csrf_reject(cookie: Option<&str>, header: Option<&str>, field: Option<&serde_json::Value>) -> Option<Response> {
+    if std::env::var("RPOREA_CSRF").map(|v| v == "0").unwrap_or(false) {
+        return None;
+    }
+    let sent = field.and_then(|v| v.as_str()).or(header);
+    let ok = match (cookie, sent) {
+        (Some(c), Some(t)) if c.len() == 40 && c.len() == t.len() => c.bytes().zip(t.bytes()).fold(0u8, |a, (x, y)| a | (x ^ y)) == 0,
+        _ => false,
+    };
+    if ok { None } else { Some(hyper_compat::text_response(StatusCode::from_u16(419).unwrap(), "text/plain; charset=utf-8", "419 | Page Expired")) }
+}
+
 /// Laravel `csrf_token()`: the token from the rporea_csrf cookie, or a fresh random 40-character one (true when new).
 fn csrf_token(req: &Request) -> (String, bool) {
     let old = req.headers().get_all("cookie").iter().filter_map(|h| h.to_str().ok()).flat_map(|h| h.split(';')).find_map(|c| c.trim().strip_prefix("rporea_csrf=").map(|v| v.to_string()));
@@ -1981,8 +2000,14 @@ def render_main(rts: list) -> str:
             body = "hyper_compat::text_response(StatusCode::NOT_IMPLEMENTED, \"text/plain; charset=utf-8\", %s)" % _rs_str(msg)
         else:
             body = _leaf_rs(tr)
-            if _uses_input(tr):
+            web_write = meth in ("POST", "PUT", "PATCH", "DELETE") and not (path == "/api" or path.startswith("/api/"))
+            if _uses_input(tr) or web_write:
                 body = "let input = read_input(req).await;"+chr(10)+"    " + body
+            if web_write:
+                # Laravel VerifyCsrfToken on web routes: _token (body) or X-CSRF-TOKEN must equal the rporea_csrf cookie, else 419.
+                # Turned off with RPOREA_CSRF=0.
+                body = ("let csrf_cookie = cookie_value(&req, \"rporea_csrf\"); let csrf_hdr = req.headers().get(\"x-csrf-token\").and_then(|v| v.to_str().ok()).map(|v| v.to_string());"
+                        + chr(10) + "    " + body.replace("let input = read_input(req).await;", "let input = read_input(req).await;" + chr(10) + "    if let Some(r) = csrf_reject(csrf_cookie.as_deref(), csrf_hdr.as_deref(), input.get(\"_token\")) { return r; }", 1))
             if "back_referer" in body:
                 body = "let back_referer = req.headers().get(\"referer\").and_then(|v| v.to_str().ok()).unwrap_or(\"/\").to_string();"+chr(10)+"    " + body
         fns.append("/// %s %s <- %s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(req: Request, params: Params) -> Response {\n    let _ = (&req, &params);\n    %s\n}\n" % (meth, path, src, name, body))

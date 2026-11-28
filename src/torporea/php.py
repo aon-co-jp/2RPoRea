@@ -1968,7 +1968,9 @@ def routes(root: str) -> list:
                     rq.append(("date_fmt", (fmt, _tz_off)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"""\{\{\s*date\(\s*(['"])([YymndjHGisDlNwMFghAa:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
-                html = re.sub(r"\{\{\s*now\(\)\s*->\s*year\s*\}\}", lambda q: _date(q, "Y"), html)
+                # Carbon properties: now()->year / month / day / hour / dayOfWeek (unpadded integers)
+                _CP = {"year": "Y", "month": "n", "day": "j", "hour": "G", "dayOfWeek": "w"}
+                html = re.sub(r"\{\{\s*now\(\)\s*->\s*(year|month|day|hour|dayOfWeek)\s*\}\}", lambda q: _date(q, _CP[q.group(1)]), html)
                 html = re.sub(r"""\{\{\s*now\(\)\s*->\s*format\(\s*(['"])([YymndjHGisDlNwMFghAa:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
                 def _envv(q):
                     rq.append(("env_esc" if q.group(1) == "{{" else "env_raw", (q.group(3), (q.group(4) or "").replace("\\'", "'"))))

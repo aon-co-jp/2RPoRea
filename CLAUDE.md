@@ -136,3 +136,4 @@
 - 2026-11-28: @session ディレクティブ / @session directive (see PORTING.md).
 - 2026-11-28: with() に文字列関数 / string functions in with() (see PORTING.md).
 - 2026-11-28: strtolower 実測 / strtolower measured (see PORTING.md).
+- 2026-11-28 `@method('PUT')` を隠し入力へ変換(実測一致) / `@method` converts to the hidden field (measured).

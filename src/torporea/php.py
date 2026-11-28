@@ -1465,6 +1465,8 @@ def routes(root: str) -> list:
                         return "@if(1 == " + ("0" if v in ("", "0") else "1") + ")"
                     return q.group(0)
                 html = re.sub(r"@if\s*\(\s*\$(\w+)\s*\)", _ptruth, html)
+                # @method('PUT'): Laravel's hidden method-spoofing field.
+                html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):
                     _prev = html
                     html = re.sub(r"@if\s*\(\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^(){}?'@]|\(\s*\$\w+\s*\)|\[\s*'\w+'\s*\])+?)\s*\)((?:(?!@if\b|@else\b|@endif\b).)*?)(?:@else((?:(?!@if\b|@endif\b).)*?))?@endif\b", _cif, html, flags=re.S)

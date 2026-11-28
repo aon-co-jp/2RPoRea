@@ -690,12 +690,13 @@ def _leaf_rs(tr) -> str:
             return "if [%s].contains(&std::env::var(\"APP_ENV\").unwrap_or_else(|_| \"production\".to_string()).as_str()) { %s } else { %s }" % (", ".join(_rs_str(x) for x in v[0]), " ".join(piece_old(a, b) for a, b in v[1]), " ".join(piece_old(a, b) for a, b in v[2]))
         if k == "date_fmt":
             # date('Y-m-d H:i:s') / now()->year at run time, UTC (Laravel's default app timezone)
-            code = ["{ let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);",
+            fmt, off = v
+            code = ["{ let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0) + %d;" % off,
                     "let (dd, sod) = (t.div_euclid(86400), t.rem_euclid(86400)); let z = dd + 719468; let era = z.div_euclid(146097); let doe = z - era * 146097;",
                     "let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); let mp = (5 * doy + 2) / 153;",
                     "let day = doy - (153 * mp + 2) / 5 + 1; let mon = if mp < 10 { mp + 3 } else { mp - 9 }; let year = yoe + era * 400 + if mon <= 2 { 1 } else { 0 };",
                     "let (hh, mi, ss) = (sod / 3600, sod % 3600 / 60, sod % 60); let _ = (year, mon, day, hh, mi, ss);"]
-            for ch in v:
+            for ch in fmt:
                 code.append({"Y": 's.push_str(&year.to_string());', "y": 's.push_str(&format!("{:02}", year % 100));',
                              "m": 's.push_str(&format!("{:02}", mon));', "n": 's.push_str(&mon.to_string());',
                              "d": 's.push_str(&format!("{:02}", day));', "j": 's.push_str(&day.to_string());',
@@ -1941,12 +1942,26 @@ def routes(root: str) -> list:
                     rq.append(("sess_esc", (q.group(2), q.group(4) or "")))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*session\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _sess, html)
-                def _date(fmt):
-                    rq.append(("date_fmt", fmt))
+                # app timezone from config/app.php: UTC, fixed-offset zones without DST, or "+09:00"; others stay TODO
+                _tz_off = 0
+                _cf = os.path.join(root, "config", "app.php")
+                if os.path.exists(_cf):
+                    _mt = re.search(r"['\"]timezone['\"]\s*=>\s*(?:env\(\s*['\"]APP_TIMEZONE['\"]\s*,\s*)?['\"]([\w/+:-]+)['\"]", open(_cf, encoding="utf-8").read())
+                    if _mt:
+                        _z = _mt.group(1)
+                        _fixed = {"UTC": 0, "Etc/UTC": 0, "GMT": 0, "Asia/Tokyo": 32400, "Asia/Seoul": 32400, "Asia/Shanghai": 28800,
+                                  "Asia/Taipei": 28800, "Asia/Hong_Kong": 28800, "Asia/Singapore": 28800, "Asia/Kolkata": 19800,
+                                  "Asia/Bangkok": 25200, "Asia/Jakarta": 25200, "Asia/Dubai": 14400}
+                        _mo = re.fullmatch(r"([+-])(\d\d):(\d\d)", _z)
+                        _tz_off = _fixed.get(_z) if _z in _fixed else ((1 if _mo.group(1) == "+" else -1) * (int(_mo.group(2)) * 3600 + int(_mo.group(3)) * 60) if _mo else None)
+                def _date(q, fmt):
+                    if _tz_off is None:
+                        return q.group(0)
+                    rq.append(("date_fmt", (fmt, _tz_off)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
-                html = re.sub(r"""\{\{\s*date\(\s*(['"])([YymndjHGis:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q.group(2)), html)
-                html = re.sub(r"\{\{\s*now\(\)\s*->\s*year\s*\}\}", lambda q: _date("Y"), html)
-                html = re.sub(r"""\{\{\s*now\(\)\s*->\s*format\(\s*(['"])([YymndjHGis:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q.group(2)), html)
+                html = re.sub(r"""\{\{\s*date\(\s*(['"])([YymndjHGis:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
+                html = re.sub(r"\{\{\s*now\(\)\s*->\s*year\s*\}\}", lambda q: _date(q, "Y"), html)
+                html = re.sub(r"""\{\{\s*now\(\)\s*->\s*format\(\s*(['"])([YymndjHGis:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
                 def _envv(q):
                     rq.append(("env_esc" if q.group(1) == "{{" else "env_raw", (q.group(3), (q.group(4) or "").replace("\\'", "'"))))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))

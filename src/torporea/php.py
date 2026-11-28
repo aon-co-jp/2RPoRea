@@ -1488,6 +1488,28 @@ def routes(root: str) -> list:
                         return q.group(0)
                     return q.group(1) if ok else ""
                 html = re.sub(r"@(checked|selected|disabled|readonly|required)\(\s*((?:[^(){}?'@]|\[\s*'\w+'\s*\])+?)\s*(===|!==|==|!=|<=|>=|<|>)\s*((?:[^(){}?'@]|'[^'\\]*'|\[\s*'\w+'\s*\])+?)\s*\)", _attrc, html)
+                # @switch($k) @case('a') ... @break ... @default ... @endswitch over literal data (no nested @switch).
+                def _sw(q):
+                    v = data.get(q.group(1))
+                    if not isinstance(v, str):
+                        return q.group(0)
+                    parts = re.split(r"(@case\(\s*(?:'[^'\\]*'|-?\d+)\s*\)|@default\b)", q.group(2))
+                    out, hit = None, False
+                    for i in range(1, len(parts), 2):
+                        lab = parts[i]
+                        body = parts[i + 1]
+                        if lab.startswith("@case"):
+                            c = re.search(r"\((.*)\)", lab).group(1).strip()
+                            c = c[1:-1] if c.startswith("'") else c
+                            hit = hit or c == v
+                        else:
+                            hit = True
+                        if hit:
+                            out = (out or "") + re.split(r"@break\b", body)[0]
+                            if re.search(r"@break\b", body):
+                                break
+                    return out or ""
+                html = re.sub(r"@switch\(\s*\$(\w+)\s*\)((?:(?!@switch\b).)*?)@endswitch\b", _sw, html, flags=re.S)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

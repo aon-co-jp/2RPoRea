@@ -175,3 +175,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 `@json($k)` を json_encode($v,15) 相当に変換(実測一致) / `@json` matches json_encode($v,15) (measured).
 - 2026-11-28 `@checked/@selected/@disabled/@readonly/@required($k)` を変換(実測一致) / attribute directives converted (measured).
 - 2026-11-28 属性ディレクティブの比較式(`@selected($c == 'jp')`)に対応(実測一致) / comparison arguments for attribute directives (measured).
+- 2026-11-28 `@switch`/`@case`/`@default` を変換(実測一致) / `@switch` converted (measured).

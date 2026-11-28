@@ -418,7 +418,7 @@ def translate(body: str, params: list):
         out = []
         for k, v in rules.items():
             rs = v.split("|") if isinstance(v, str) else v
-            if not isinstance(rs, list) or not all(isinstance(r, str) and re.fullmatch(r"required|string|numeric|integer|nullable|email|confirmed|alpha|alpha_num|(?:min|max):\d+|between:\d+,\d+|in:[\w.-]+(?:,[\w.-]+)*", r) for r in rs):
+            if not isinstance(rs, list) or not all(isinstance(r, str) and re.fullmatch(r"required|string|numeric|integer|nullable|email|confirmed|alpha|alpha_num|boolean|accepted|url|lowercase|uppercase|(?:min|max|size|digits):\d+|(?:between|digits_between):\d+,\d+|(?:not_in|in|starts_with|ends_with):[\w.-]+(?:,[\w.-]+)*|(?:same|different):[\w.-]+", r) for r in rs):
                 return None
             out.append((k, rs))
         inner = translate(b[vm.end():], params)
@@ -1831,6 +1831,7 @@ fn validate_field(input: &std::collections::HashMap<String, serde_json::Value>, 
         Some(t) => t,
         None => {
             if rules.contains(&"required") { out.push(format!("The {label} field is required.")); }
+            if rules.contains(&"accepted") { out.push(format!("The {label} field must be accepted.")); }
             return out;
         }
     };
@@ -1847,6 +1848,36 @@ fn validate_field(input: &std::collections::HashMap<String, serde_json::Value>, 
         if *r == "alpha_num" && !t.chars().all(|c| c.is_alphanumeric()) { out.push(format!("The {label} field must only contain letters and numbers.")); }
         if let Some(list) = r.strip_prefix("in:") {
             if !list.split(',').any(|x| x == t) { out.push(format!("The selected {label} is invalid.")); }
+        }
+        if let Some(list) = r.strip_prefix("not_in:") {
+            if list.split(',').any(|x| x == t) { out.push(format!("The selected {label} is invalid.")); }
+        }
+        if *r == "boolean" && !["true", "false", "1", "0"].contains(&t.as_str()) { out.push(format!("The {label} field must be true or false.")); }
+        if *r == "accepted" && !["yes", "on", "1", "true"].contains(&t.as_str()) { out.push(format!("The {label} field must be accepted.")); }
+        if *r == "lowercase" && t != t.to_lowercase() { out.push(format!("The {label} field must be lowercase.")); }
+        if *r == "uppercase" && t != t.to_uppercase() { out.push(format!("The {label} field must be uppercase.")); }
+        if *r == "url" && !{ let rest = t.strip_prefix("https://").or_else(|| t.strip_prefix("http://")); rest.map(|h| !h.is_empty() && !h.starts_with('/') && !t.chars().any(|c| c.is_whitespace())).unwrap_or(false) } { out.push(format!("The {label} field must be a valid URL.")); }
+        if let Some(list) = r.strip_prefix("starts_with:") {
+            if !list.split(',').any(|x| t.starts_with(x)) { out.push(format!("The {label} field must start with one of the following: {}.", list.replace(',', ", "))); }
+        }
+        if let Some(list) = r.strip_prefix("ends_with:") {
+            if !list.split(',').any(|x| t.ends_with(x)) { out.push(format!("The {label} field must end with one of the following: {}.", list.replace(',', ", "))); }
+        }
+        if let Some(o) = r.strip_prefix("same:") {
+            if input.get(o).and_then(|v| v.as_str()).map(|c| c.trim()) != Some(t.as_str()) { out.push(format!("The {label} field must match {}.", o.replace('_', " "))); }
+        }
+        if let Some(o) = r.strip_prefix("different:") {
+            if input.get(o).and_then(|v| v.as_str()).map(|c| c.trim()) == Some(t.as_str()) { out.push(format!("The {label} field and {} must be different.", o.replace('_', " "))); }
+        }
+        if let Some(n) = r.strip_prefix("digits:") {
+            if !t.bytes().all(|b| b.is_ascii_digit()) || t.len().to_string() != n { out.push(format!("The {label} field must be {n} digits.")); }
+        }
+        if let Some((a, b)) = r.strip_prefix("digits_between:").and_then(|x| x.split_once(',')) {
+            let l = t.len();
+            if !t.bytes().all(|c| c.is_ascii_digit()) || l < a.parse().unwrap_or(0) || l > b.parse().unwrap_or(0) { out.push(format!("The {label} field must be between {a} and {b} digits.")); }
+        }
+        if let Some(n) = r.strip_prefix("size:") {
+            if size != n.parse::<f64>().unwrap_or(-1.0) { out.push(format!("The {label} field must be {n}{}.", if by_num { "" } else { " characters" })); }
         }
         if let Some((a, b)) = r.strip_prefix("between:").and_then(|x| x.split_once(',')) {
             if size < a.parse::<f64>().unwrap_or(0.0) || size > b.parse::<f64>().unwrap_or(0.0) { out.push(format!("The {label} field must be between {a} and {b}{unit}.")); }

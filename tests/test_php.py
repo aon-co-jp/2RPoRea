@@ -877,3 +877,9 @@ def test_with_request_input():
     from torporea import php
     tr = php.translate("return back()->with('s', $request->input('name'));", [])
     assert tr == ("backw", "s", ("in", "name"), None) and php._uses_input(tr)
+
+
+def test_with_route_param():
+    from torporea import php
+    assert php.translate("return back()->with('s', $id);", ["id"]) == ("backw", "s", ("param", "id"), None)
+    assert php.translate("return back()->with('s', $x);", ["id"]) is None

@@ -116,3 +116,4 @@
 - 2026-11-28: @if(session('k')) に対応 / @if(session('k')) supported (see PORTING.md).
 - 2026-11-28: redirect('/path')->with() / redirect('/path')->with() (see PORTING.md).
 - 2026-11-28: with() に $request->input() / with() of request input (see PORTING.md).
+- 2026-11-28: with() にルート引数 / with() of a route parameter (see PORTING.md).

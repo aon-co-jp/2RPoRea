@@ -199,3 +199,5 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 @prepend・@once・@hasSection 対応・実測済み / @prepend, @once, @hasSection, measured (PORTING.md)
 
 - 2026-11-28 @sectionMissing 対応・入れ子 @if は 501 で安全化・実測済み / @sectionMissing; nested @if gives 501, measured (PORTING.md)
+
+- 2026-11-28 @hasSection 内の入れ子 @if 対応・実測済み / nested @if inside @hasSection, measured (PORTING.md)

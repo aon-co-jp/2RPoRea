@@ -765,10 +765,36 @@ def _blade_layout(root: str, html, depth: int = 0):
         lay = re.sub(r"@section\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@show\b", _show, lay, flags=re.S)
         lay = re.sub(r"@stack\(\s*(['\"])([\w.-]+)\1\s*\)", lambda m: "".join(pre.get(m.group(2), []) + pushes.get(m.group(2), [])), lay)
         # @hasSection('x') ... [@else ...] @endif, decided at convert time from the child's sections.
-        # A nested @if would pair with the wrong @endif, so such bodies are left alone (the view becomes a 501 TODO).
-        _nb = r"((?:(?!@(?:if|unless|isset|empty|hasSection|sectionMissing)\b).)*?)"
-        lay = re.sub(r"@(hasSection|sectionMissing)\(\s*(['\"])([\w.-]+)\2\s*\)" + _nb + r"(?:@else" + _nb + r")?@endif\b",
-                     lambda m: m.group(4) if (m.group(3) in sec) == (m.group(1) == "hasSection") else (m.group(5) or ""), lay, flags=re.S)
+        # Balanced: count @if/@hasSection/@sectionMissing against @endif so nested @if stays intact
+        # (the inner @if is then handled by the normal view pipeline).
+        def _hs(t):
+            tok = re.compile(r"@(?:(if|hasSection|sectionMissing)\b|(else)\b|(elseif)\b|(endif)\b)")
+            while True:
+                st = re.search(r"@(hasSection|sectionMissing)\(\s*(['\"])([\w.-]+)\2\s*\)", t)
+                if not st:
+                    return t
+                depth, pos, els, end = 0, st.end(), None, None
+                for m in tok.finditer(t, st.end()):
+                    if m.group(1):
+                        depth += 1
+                    elif m.group(4):
+                        if depth == 0:
+                            end = m
+                            break
+                        depth -= 1
+                    elif m.group(2) and depth == 0 and els is None:
+                        els = m
+                    elif m.group(3) and depth == 0:
+                        return None
+                if end is None:
+                    return None
+                body = t[st.end():(els.start() if els else end.start())]
+                other = t[els.end():end.start()] if els else ""
+                keep = (st.group(3) in sec) == (st.group(1) == "hasSection")
+                t = t[:st.start()] + (body if keep else other) + t[end.end():]
+        lay = _hs(lay)
+        if lay is None:
+            return None
         html = re.sub(r"@yield\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)",
                       lambda m: sec.get(m.group(2), m.group(4) or ""), lay)
     else:

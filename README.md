@@ -209,3 +209,5 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 @includeFirst・@each 対応、@forelse の @empty 認識の修正・実測済み / @includeFirst, @each, @forelse @empty fix, measured (PORTING.md)
 
 - 2026-11-28 @include の配列参照の値に対応・実測済み / @include with array-lookup values, measured (PORTING.md)
+
+- 2026-11-28 @include の関数呼び出しの値に対応・実測済み / @include with function-call values, measured (PORTING.md)

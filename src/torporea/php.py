@@ -821,7 +821,9 @@ def _blade_layout(root: str, html, depth: int = 0):
             body = m.group(3).strip()
             ren = {}
             # value: a literal string, or $var with optional ['key'] / [0] lookups (e.g. $u['name'])
-            pair = r"'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\$(\w+(?:\[(?:'[\w-]*'|\d+)\])*))\s*(?:,|$)"
+            # or one string function around such a value (e.g. ucfirst($u['name'])).
+            _lk = r"\$\w+(?:\[(?:'[\w-]*'|\d+)\])*"
+            pair = (r"'(\w+)'\s*=>\s*(?:'([^'\\]*)'|(" + _lk + r"|(?:strtoupper|strtolower|ucfirst|ucwords|lcfirst|trim|strrev)\(\s*" + _lk + r"\s*\)))\s*(?:,|$)")
             for kv in re.finditer(pair, body):
                 if kv.group(3) is not None:
                     ren[kv.group(1)] = kv.group(3)
@@ -835,7 +837,10 @@ def _blade_layout(root: str, html, depth: int = 0):
             for k, var in ren.items():
                 if re.search(r"(?:\bas\s+\$%s\b|\$%s\s*=[^=>])" % (k, k), v):
                     return bad
-                v = re.sub(r"\$%s\b" % k, "$" + var, v)
+                # a function-call value is only safe where $k stands alone (not $k['x'] / $k->x)
+                if not var.startswith("$") and re.search(r"\$%s\s*(?:\[|->)" % k, v):
+                    return bad
+                v = re.sub(r"\$%s\b" % k, lambda _q: var, v)
             v = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda q: _h.escape(data[q.group(1)]) if q.group(1) in data else q.group(0), v)
             v = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda q: data[q.group(1)] if q.group(1) in data else q.group(0), v)
         return v

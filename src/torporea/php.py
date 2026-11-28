@@ -1817,6 +1817,31 @@ def routes(root: str) -> list:
                     return pick.replace(":count", str(c))
                 html = re.sub(r"\{\{\s*trans_choice\(\s*(['\"])([^'\"]+)\1\s*,\s*(\d+|\$\w+)\s*\)\s*\}\}", lambda q: q.group(0) if _choice(q) is None else _html_esc(_choice(q)), html)
                 html = re.sub(r"@choice\(\s*(['\"])([^'\"]+)\1\s*,\s*(\d+|\$\w+)\s*\)", lambda q: q.group(0) if _choice(q) is None else _html_esc(_choice(q)), html)
+                # {{ config('file.key', 'default') }}: a literal string/number in config/<file>.php at convert time;
+                # values computed by env() or code are left untouched (they need the runtime environment).
+                def _cfg(q):
+                    fn, _, key = q.group(2).partition(".")
+                    cf = os.path.join(root, "config", fn + ".php")
+                    if key and "." not in key and os.path.exists(cf):
+                        src = open(cf, encoding="utf-8").read()
+                        mm = re.search(r"['\"]" + re.escape(key) + r"['\"]\s*=>\s*(?:'((?:[^'\\]|\\.)*)'|(-?\d+(?:\.\d+)?)|(true|false))\s*[,\]]", src)
+                        if mm:
+                            if mm.group(1) is not None:
+                                return mm.group(1).replace("\\'", "'")
+                            if mm.group(2) is not None:
+                                return mm.group(2)
+                            return "1" if mm.group(3) == "true" else ""
+                        if re.search(r"['\"]" + re.escape(key) + r"['\"]\s*=>", src):
+                            return None
+                    return q.group(4) or ""  # missing key: the default, else null (prints nothing)
+                def _cfgsub(esc):
+                    def f(q):
+                        v = _cfg(q)
+                        return q.group(0) if v is None else (_html_esc(v) if esc else v)
+                    return f
+                _CFA = r"""config\(\s*(['"])([\w.-]+)\1\s*(?:,\s*(['"])((?:(?!\3).)*)\3\s*)?\)"""
+                html = re.sub(r"\{\{\s*" + _CFA + r"\s*\}\}", _cfgsub(True), html)
+                html = re.sub(r"\{!!\s*" + _CFA + r"\s*!!\}", _cfgsub(False), html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

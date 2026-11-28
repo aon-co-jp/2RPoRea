@@ -820,7 +820,8 @@ def _blade_layout(root: str, html, depth: int = 0):
             data = {}
             body = m.group(3).strip()
             ren = {}
-            pair = r"'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\$(\w+))\s*(?:,|$)"
+            # value: a literal string, or $var with optional ['key'] / [0] lookups (e.g. $u['name'])
+            pair = r"'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\$(\w+(?:\[(?:'[\w-]*'|\d+)\])*))\s*(?:,|$)"
             for kv in re.finditer(pair, body):
                 if kv.group(3) is not None:
                     ren[kv.group(1)] = kv.group(3)
@@ -829,6 +830,7 @@ def _blade_layout(root: str, html, depth: int = 0):
             if re.sub(pair, "", body).strip():
                 return bad
             # ['k' => $var]: the partial's $k becomes the parent's $var, so the normal view pipeline fills it.
+            # $k['x'] on a value that is already a lookup chains naturally ($u['a']['x']).
             # A partial that binds $k itself (foreach ... as $k, @php $k =) is left as a TODO.
             for k, var in ren.items():
                 if re.search(r"(?:\bas\s+\$%s\b|\$%s\s*=[^=>])" % (k, k), v):
@@ -862,7 +864,7 @@ def _blade_layout(root: str, html, depth: int = 0):
     # @includeIf('v'): included when the view exists, nothing otherwise.
     html = re.sub(r"@includeIf\(\s*(['\"])([\w.-]+)\1\s*((?:,\s*\[[^\[\]]*\]\s*)?)\)",
                   lambda m: ("@include('%s'%s)" % (m.group(2), m.group(3).rstrip())) if _load(m.group(2)) is not None else "", html)
-    html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*\[([^\[\]]*)\]\s*)?\)", _inc, html)
+    html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\s*)?\)", _inc, html)
     if depth == 0:
         html = re.sub(r"@once\b(.*?)@endonce\b", _once, html, flags=re.S)
     if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|prepend|endprepend|stack|parent|show|once|endonce|hasSection|sectionMissing|includeIf|includeWhen|includeUnless|includeFirst|each)\b", html)):

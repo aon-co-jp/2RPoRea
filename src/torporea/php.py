@@ -837,10 +837,17 @@ def _blade_layout(root: str, html, depth: int = 0):
             v = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda q: _h.escape(data[q.group(1)]) if q.group(1) in data else q.group(0), v)
             v = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda q: data[q.group(1)] if q.group(1) in data else q.group(0), v)
         return v
+    # @includeWhen($b, 'v') / @includeUnless($b, 'v') become @if/@unless around a plain @include
+    # (the condition is decided at run time by the normal view pipeline).
+    html = re.sub(r"@include(When|Unless)\(\s*(\$\w+)\s*,\s*(['\"])([\w.-]+)\3\s*((?:,\s*\[[^\[\]]*\]\s*)?)\)",
+                  lambda m: "@%s(%s)@include('%s'%s)@end%s" % ("if" if m.group(1) == "When" else "unless", m.group(2), m.group(4), m.group(5).rstrip(), "if" if m.group(1) == "When" else "unless"), html)
+    # @includeIf('v'): included when the view exists, nothing otherwise.
+    html = re.sub(r"@includeIf\(\s*(['\"])([\w.-]+)\1\s*((?:,\s*\[[^\[\]]*\]\s*)?)\)",
+                  lambda m: ("@include('%s'%s)" % (m.group(2), m.group(3).rstrip())) if _load(m.group(2)) is not None else "", html)
     html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*\[([^\[\]]*)\]\s*)?\)", _inc, html)
     if depth == 0:
         html = re.sub(r"@once\b(.*?)@endonce\b", _once, html, flags=re.S)
-    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|prepend|endprepend|stack|parent|show|once|endonce|hasSection|sectionMissing)\b", html)):
+    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|prepend|endprepend|stack|parent|show|once|endonce|hasSection|sectionMissing|includeIf|includeWhen|includeUnless)\b", html)):
         return None
     return html
 

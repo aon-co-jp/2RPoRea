@@ -203,3 +203,5 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 @hasSection 内の入れ子 @if 対応・実測済み / nested @if inside @hasSection, measured (PORTING.md)
 
 - 2026-11-28 @include の変数値対応・実測済み / @include with variable values, measured (PORTING.md)
+
+- 2026-11-28 @includeIf/When/Unless 対応・実測済み / @includeIf/When/Unless, measured (PORTING.md)

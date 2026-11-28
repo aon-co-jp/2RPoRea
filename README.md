@@ -184,3 +184,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28 CSRF 照合(不一致で419、`RPOREA_CSRF=0` で無効)を実装・実測 / CSRF verification (419; `RPOREA_CSRF=0` disables), measured.
 - 2026-11-28 `_method` の振り分け(フォームの PUT/PATCH/DELETE)を実装・実測 / method spoofing implemented and measured.
 - 2026-11-28 CSRF except(validateCsrfTokens/$except)対応、実測済み / CSRF except paths supported, measured.
+- 2026-11-28 @csrf+@method 通しフォーム試験成功(実測) / end-to-end form test passed (measured).

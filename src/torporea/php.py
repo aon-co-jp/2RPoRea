@@ -1909,8 +1909,8 @@ fn cookie_value(req: &Request, name: &str) -> Option<String> {
 }
 
 /// Laravel VerifyCsrfToken: 419 "Page Expired" unless the submitted token equals the cookie token (compared in constant time).
-fn csrf_reject(cookie: Option<&str>, header: Option<&str>, field: Option<&serde_json::Value>) -> Option<Response> {
-    if std::env::var("RPOREA_CSRF").map(|v| v == "0").unwrap_or(false) {
+fn csrf_reject(path: &str, cookie: Option<&str>, header: Option<&str>, field: Option<&serde_json::Value>) -> Option<Response> {
+    if std::env::var("RPOREA_CSRF").map(|v| v == "0").unwrap_or(false) || CSRF_EXCEPT.iter().any(|p| path_is(path, p)) {
         return None;
     }
     let sent = field.and_then(|v| v.as_str()).or(header);
@@ -1919,6 +1919,29 @@ fn csrf_reject(cookie: Option<&str>, header: Option<&str>, field: Option<&serde_
         _ => false,
     };
     if ok { None } else { Some(hyper_compat::text_response(StatusCode::from_u16(419).unwrap(), "text/plain; charset=utf-8", "419 | Page Expired")) }
+}
+
+/// Laravel `$request->is($pattern)` on the path: leading/trailing '/' ignored, '*' matches anything (also '/').
+fn path_is(path: &str, pat: &str) -> bool {
+    let path = path.trim_matches('/');
+    let pat = pat.trim_matches('/');
+    let parts: Vec<&str> = pat.split('*').collect();
+    if parts.len() == 1 {
+        return path == pat;
+    }
+    let mut rest = path;
+    for (i, part) in parts.iter().enumerate() {
+        if i == 0 {
+            let Some(r) = rest.strip_prefix(part) else { return false };
+            rest = r;
+        } else if i == parts.len() - 1 {
+            return rest.ends_with(part);
+        } else {
+            let Some(at) = rest.find(part) else { return false };
+            rest = &rest[at + part.len()..];
+        }
+    }
+    true
 }
 
 /// Laravel `csrf_token()`: the token from the rporea_csrf cookie, or a fresh random 40-character one (true when new).
@@ -1991,10 +2014,11 @@ def _uses_input(tr) -> bool:
     return tr[0] == "input_all" or (tr[0] == "text" and any(k in ("query", "query_esc") for k, _ in tr[1]))
 
 
-def render_main(rts: list) -> str:
+def render_main(rts: list, laravel: bool = True, csrf_except=()) -> str:
     fns, ats, by_path = [], [], {}
     def _web(path):
-        return not (path == "/api" or path.startswith("/api/"))
+        # Laravel's web-middleware behaviours (CSRF, method spoofing) apply only to Laravel apps, outside /api.
+        return laravel and not (path == "/api" or path.startswith("/api/"))
     # Laravel method spoofing: a form POST with _method=PUT/PATCH/DELETE runs that route's handler (web routes only).
     spoof = {}
     for meth, path, params, tr, src in rts:
@@ -2028,8 +2052,8 @@ def render_main(rts: list) -> str:
             if web_write:
                 # Laravel VerifyCsrfToken on web routes: _token (body) or X-CSRF-TOKEN must equal the rporea_csrf cookie, else 419.
                 # Turned off with RPOREA_CSRF=0.
-                body = ("let csrf_cookie = cookie_value(&req, \"rporea_csrf\"); let csrf_hdr = req.headers().get(\"x-csrf-token\").and_then(|v| v.to_str().ok()).map(|v| v.to_string());"
-                        + chr(10) + "    " + body.replace("let input = read_input(req).await;", "let input = read_input(req).await;" + chr(10) + "    if let Some(r) = csrf_reject(csrf_cookie.as_deref(), csrf_hdr.as_deref(), input.get(\"_token\")) { return r; }", 1))
+                body = ("let csrf_path = req.uri().path().to_string(); let csrf_cookie = cookie_value(&req, \"rporea_csrf\"); let csrf_hdr = req.headers().get(\"x-csrf-token\").and_then(|v| v.to_str().ok()).map(|v| v.to_string());"
+                        + chr(10) + "    " + body.replace("let input = read_input(req).await;", "let input = read_input(req).await;" + chr(10) + "    if let Some(r) = csrf_reject(&csrf_path, csrf_cookie.as_deref(), csrf_hdr.as_deref(), input.get(\"_token\")) { return r; }", 1))
             if "back_referer" in body:
                 body = "let back_referer = req.headers().get(\"referer\").and_then(|v| v.to_str().ok()).unwrap_or(\"/\").to_string();"+chr(10)+"    " + body
         fns.append("/// %s %s <- %s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(req: Request, params: Params) -> Response {\n    let _ = (&req, &params);\n    %s\n}\n" % (meth, path, src, name, body))
@@ -2042,11 +2066,25 @@ def render_main(rts: list) -> str:
     return ("//! 2RPoRea が PHP(Laravel) から生成した RPoem サーバー。訳せた return だけ本体あり、他は 501。\n"
             "#![allow(unused_variables, unused_imports, dead_code)]\n"
             "use open_runo_poem_compat::{delete, get, hyper_compat, patch, post, put, Params, Request, Response, Route, Server, StatusCode, TcpListener};\n\n"
-            + _QUERY_HELPER + "\n".join(fns) +
+            + _QUERY_HELPER + "/// Laravel CSRF `except` paths (validateCsrfTokens(except:) / VerifyCsrfToken::$except), full URLs left out.\nconst CSRF_EXCEPT: &[&str] = &[%s];\n\n" % ", ".join(_rs_str(x) for x in csrf_except) + "\n".join(fns) +
             "\n#[tokio::main]\nasync fn main() {\n    let port: u16 = std::env::var(\"PORT\").ok().and_then(|p| p.parse().ok()).unwrap_or(3002);\n"
             "    let app = Route::new()\n" + "\n".join(ats) + ";\n"
             "    let (addr, handle) = Server::new(TcpListener::bind(([127, 0, 0, 1], port))).run(app).await.expect(\"bind\");\n"
             "    println!(\"listening on {addr}\");\n    handle.await.ok();\n}\n")
+
+
+def csrf_except(root: str) -> list:
+    """Paths excluded from CSRF checks: Laravel 11 bootstrap/app.php validateCsrfTokens(except: [...]) and
+    Laravel 10 app/Http/Middleware/VerifyCsrfToken.php $except. Literal strings only; full URLs are skipped."""
+    out = []
+    for rel, rx in (("bootstrap/app.php", r"validateCsrfTokens\(\s*except\s*:\s*\[([^\]]*)\]"),
+                    ("app/Http/Middleware/VerifyCsrfToken.php", r"\$except\s*=\s*\[([^\]]*)\]")):
+        p = os.path.join(root, rel)
+        if os.path.exists(p):
+            m = re.search(rx, _strip_comments(open(p, encoding="utf-8", errors="replace").read()))
+            if m:
+                out += [x for t in re.findall(r"'([^'\\]*)'|\"([^\"\\]*)\"", m.group(1)) for x in t if x and "://" not in x]
+    return out
 
 
 def write(root: str, out: str, rpoem_path: str = "F:/RPoem") -> dict:
@@ -2059,7 +2097,7 @@ def write(root: str, out: str, rpoem_path: str = "F:/RPoem") -> dict:
                 'open-runo-poem-compat-macro = { path = "%s/crates/open-runo-poem-compat-macro" }\n'
                 'getrandom = "0.2"\nhttp-body-util = "0.1"\nserde_json = "1"\ntokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }\n' % (rp, rp))
     with open(os.path.join(out, "src", "main.rs"), "w", encoding="utf-8", newline="\n") as f:
-        f.write(render_main(rts))
+        f.write(render_main(rts, csrf_except=csrf_except(root)))
     done = sum(1 for r in rts if r[3] is not None)
     return {"routes": len(rts), "translated": done, "todo": len(rts) - done,
             "patch": sum(1 for r in rts if r[0] == "PATCH")}

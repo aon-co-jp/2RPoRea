@@ -219,8 +219,8 @@ def write(root: str, out: str, rpoem_path: str = "F:/RPoem") -> dict:
         f.write('[package]\nname = "perl-ported"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\n'
                 'open-runo-poem-compat = { path = "%s/crates/open-runo-poem-compat" }\n'
                 'open-runo-poem-compat-macro = { path = "%s/crates/open-runo-poem-compat-macro" }\n'
-                'serde_json = "1"\ntokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }\n' % (rp, rp))
-    main = render_main(rts).replace("PHP(Laravel)", "Perl(Mojolicious/Dancer)").replace("(Laravel)", "(Perl)").replace("unwrap_or(3002)", "unwrap_or(3003)")
+                'getrandom = "0.2"\nhttp-body-util = "0.1"\nserde_json = "1"\ntokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }\n' % (rp, rp))
+    main = render_main(rts, laravel=False).replace("PHP(Laravel)", "Perl(Mojolicious/Dancer)").replace("(Laravel)", "(Perl)").replace("unwrap_or(3002)", "unwrap_or(3003)")
     with open(os.path.join(out, "src", "main.rs"), "w", encoding="utf-8", newline="\n") as f:
         f.write(main)
     done = sum(1 for r in rts if r[3] is not None)

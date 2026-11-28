@@ -1465,6 +1465,15 @@ def routes(root: str) -> list:
                         return "@if(1 == " + ("0" if v in ("", "0") else "1") + ")"
                     return q.group(0)
                 html = re.sub(r"@if\s*\(\s*\$(\w+)\s*\)", _ptruth, html)
+                # @json($k) over literal view data: json_encode($v, 15) (HEX_TAG|AMP|APOS|QUOT, escaped slashes).
+                def _jsond(q):
+                    if q.group(1) not in data:
+                        return q.group(0)
+                    j = json.dumps(data[q.group(1)], separators=(",", ":"), ensure_ascii=True)
+                    for a, b in (("\\" + '"', "\\u0022"), ("/", "\\/"), ("<", "\\u003C"), (">", "\\u003E"), ("&", "\\u0026"), ("'", "\\u0027")):
+                        j = j.replace(a, b)
+                    return j
+                html = re.sub(r"@json\(\s*\$(\w+)\s*\)", _jsond, html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

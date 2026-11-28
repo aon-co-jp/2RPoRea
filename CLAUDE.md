@@ -137,3 +137,4 @@
 - 2026-11-28: with() に文字列関数 / string functions in with() (see PORTING.md).
 - 2026-11-28: strtolower 実測 / strtolower measured (see PORTING.md).
 - 2026-11-28 `@method('PUT')` を隠し入力へ変換(実測一致) / `@method` converts to the hidden field (measured).
+- 2026-11-28 `@json($k)` を json_encode($v,15) 相当に変換(実測一致) / `@json` matches json_encode($v,15) (measured).

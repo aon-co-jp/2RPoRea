@@ -883,3 +883,9 @@ def test_with_route_param():
     from torporea import php
     assert php.translate("return back()->with('s', $id);", ["id"]) == ("backw", [("s", ("param", "id"))], None)
     assert php.translate("return back()->with('s', $x);", ["id"]) is None
+
+
+def test_with_concatenation():
+    from torporea import php
+    tr = php.translate("return back()->with('s', 'Item ' . $id . ' by ' . $request->input('n'));", ["id"])
+    assert tr[1] == [("s", ("cat", ["Item ", ("param", "id"), " by ", ("in", "n")]))] and php._uses_input(tr)

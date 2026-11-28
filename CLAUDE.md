@@ -131,3 +131,4 @@
 - 2026-11-28: with() にルート引数 / with() of a route parameter (see PORTING.md).
 - 2026-11-28: with() の連結 / chained with() (see PORTING.md).
 - 2026-11-28: session() の既定値 / session() default (see PORTING.md).
+- 2026-11-28: with() に文字列の連結 / with() of concatenation (see PORTING.md).

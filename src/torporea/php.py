@@ -482,15 +482,19 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
-        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))((?:\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*(?:'([^'\\]*)'|\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))\s*\))+)", stmts[-1], re.S)
+        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))((?:\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\.\s*(?:'[^'\\]*'|\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+))*)\s*\))+)", stmts[-1], re.S)
         if bw:
             # redirect('/path')->with(...) goes to the literal path; back() to the Referer. Each ->with('k', v) takes a
             # literal, $request->input('x') (run-time value) or a route parameter.
             items = []
-            for wm in re.finditer(r"\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*(?:'([^'\\]*)'|\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))\s*\)", bw.group(2)):
-                if wm.group(4) and wm.group(4) not in params:
-                    return None
-                items.append((wm.group(1), ("param", wm.group(4)) if wm.group(4) else (wm.group(2) if wm.group(3) is None else ("in", wm.group(3)))))
+            for wm in re.finditer(r"\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\.\s*(?:'[^'\\]*'|\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+))*)\s*\)", bw.group(2)):
+                # 'a' . $id . $request->input('x'): concatenation of literals, route parameters and request values.
+                parts = []
+                for am in re.finditer(r"'([^'\\]*)'|\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+)", wm.group(2)):
+                    if am.group(3) and am.group(3) not in params:
+                        return None
+                    parts.append(("param", am.group(3)) if am.group(3) else (am.group(1) if am.group(2) is None else ("in", am.group(2))))
+                items.append((wm.group(1), parts[0] if len(parts) == 1 else ("cat", parts)))
             return ("backw", items, bw.group(1))
         bx = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))((?:\s*->\s*with(?:Input|Errors)\((?:[^()]|\([^()]*\))*\))+)", stmts[-1], re.S)
         if bx and "withErrors" in bx.group(1):
@@ -587,6 +591,14 @@ def _leaf_rs(tr) -> str:
                 return "serde_json::Value::String(%s.to_string())" % _rs_str(v)
             if v[0] == "in":
                 return "input.get(%s).cloned().unwrap_or(serde_json::Value::Null)" % _rs_str(v[1])
+            if v[0] == "cat":
+                def _t(x):
+                    if isinstance(x, str):
+                        return "s.push_str(%s);" % _rs_str(x)
+                    if x[0] == "in":
+                        return "s.push_str(&input.get(%s).map(|v| match v { serde_json::Value::String(t) => t.clone(), serde_json::Value::Null => String::new(), o => o.to_string() }).unwrap_or_default());" % _rs_str(x[1])
+                    return "s.push_str(params.get(%s).unwrap_or(\"\"));" % _rs_str(x[1])
+                return "{ let mut s = String::new(); %s serde_json::Value::String(s) }" % " ".join(_t(x) for x in v[1])
             return "serde_json::Value::String(params.get(%s).unwrap_or(\"\").to_string())" % _rs_str(v[1])
         fl = " ".join("m.insert(%s.to_string(), %s);" % (_rs_str(k), _v(v)) for k, v in tr[1])
         loc = "%s.parse().unwrap()" % _rs_str(tr[2]) if tr[2] else "back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())"
@@ -1829,7 +1841,7 @@ def _uses_input(tr) -> bool:
     if tr[0] == "valid":
         return True
     if tr[0] == "backw":
-        return any(not isinstance(v, str) and v[0] == "in" for _, v in tr[1])
+        return any(not isinstance(v, str) and (v[0] == "in" or (v[0] == "cat" and any(not isinstance(x, str) and x[0] == "in" for x in v[1]))) for _, v in tr[1])
     if tr[0] == "hdr":
         return _uses_input(tr[2])
     return tr[0] == "input_all" or (tr[0] == "text" and any(k in ("query", "query_esc") for k, _ in tr[1]))

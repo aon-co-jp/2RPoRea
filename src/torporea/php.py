@@ -750,6 +750,10 @@ def _blade_layout(root: str, html, depth: int = 0):
         pushes = {}
         for m in re.finditer(r"@push\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@endpush\b", html, re.S):
             pushes.setdefault(m.group(2), []).append(m.group(3))
+        # @prepend('x') ... @endprepend goes before the pushes (later prepends first, as in Laravel).
+        pre = {}
+        for m in re.finditer(r"@prepend\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@endprepend\b", html, re.S):
+            pre.setdefault(m.group(2), []).insert(0, m.group(3))
         lay = _blade_layout(root, _load(ext.group(2)), depth + 1)
         if lay is None:
             return None
@@ -759,7 +763,10 @@ def _blade_layout(root: str, html, depth: int = 0):
                 return sec[m.group(2)].replace("@parent", m.group(3))
             return m.group(3)
         lay = re.sub(r"@section\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@show\b", _show, lay, flags=re.S)
-        lay = re.sub(r"@stack\(\s*(['\"])([\w.-]+)\1\s*\)", lambda m: "".join(pushes.get(m.group(2), [])), lay)
+        lay = re.sub(r"@stack\(\s*(['\"])([\w.-]+)\1\s*\)", lambda m: "".join(pre.get(m.group(2), []) + pushes.get(m.group(2), [])), lay)
+        # @hasSection('x') ... [@else ...] @endif, decided at convert time from the child's sections.
+        lay = re.sub(r"@hasSection\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)(?:@else(.*?))?@endif\b",
+                     lambda m: m.group(3) if m.group(2) in sec else (m.group(4) or ""), lay, flags=re.S)
         html = re.sub(r"@yield\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)",
                       lambda m: sec.get(m.group(2), m.group(4) or ""), lay)
     else:
@@ -769,6 +776,13 @@ def _blade_layout(root: str, html, depth: int = 0):
             html = re.sub(r"@section\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@show\b", lambda m: m.group(3), html, flags=re.S)
             html = re.sub(r"@stack\(\s*(['\"])([\w.-]+)\1\s*\)", "", html)
     bad = chr(0) + "BAD" + chr(0)
+    # @once ... @endonce: identical blocks kept only the first time in this view.
+    seen = set()
+    def _once(m):
+        if m.group(1) in seen:
+            return ""
+        seen.add(m.group(1))
+        return m.group(1)
     def _inc(m):
         v = _blade_layout(root, _load(m.group(2)), depth + 1)
         if v is None:
@@ -785,7 +799,9 @@ def _blade_layout(root: str, html, depth: int = 0):
             v = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda q: data[q.group(1)] if q.group(1) in data else q.group(0), v)
         return v
     html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*\[([^\[\]]*)\]\s*)?\)", _inc, html)
-    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|stack|parent|show)\b", html)):
+    if depth == 0:
+        html = re.sub(r"@once\b(.*?)@endonce\b", _once, html, flags=re.S)
+    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|prepend|endprepend|stack|parent|show|once|endonce|hasSection)\b", html)):
         return None
     return html
 

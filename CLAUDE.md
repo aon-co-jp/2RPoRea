@@ -160,3 +160,5 @@
 - 2026-11-28 @include のデータ受け渡し(文字列)対応・実測済み / @include with literal data, measured (PORTING.md)
 
 - 2026-11-28 @stack/@push・@parent 対応・実測済み / @stack/@push and @parent, measured (PORTING.md)
+
+- 2026-11-28 @prepend・@once・@hasSection 対応・実測済み / @prepend, @once, @hasSection, measured (PORTING.md)

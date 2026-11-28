@@ -695,13 +695,21 @@ def _leaf_rs(tr) -> str:
                     "let (dd, sod) = (t.div_euclid(86400), t.rem_euclid(86400)); let z = dd + 719468; let era = z.div_euclid(146097); let doe = z - era * 146097;",
                     "let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); let mp = (5 * doy + 2) / 153;",
                     "let day = doy - (153 * mp + 2) / 5 + 1; let mon = if mp < 10 { mp + 3 } else { mp - 9 }; let year = yoe + era * 400 + if mon <= 2 { 1 } else { 0 };",
-                    "let (hh, mi, ss) = (sod / 3600, sod % 3600 / 60, sod % 60); let _ = (year, mon, day, hh, mi, ss);"]
+                    "let (hh, mi, ss) = (sod / 3600, sod % 3600 / 60, sod % 60); let wd = (dd + 4).rem_euclid(7); let h12 = if hh % 12 == 0 { 12 } else { hh % 12 };",
+                    "const DN: [&str; 7] = [\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"];",
+                    "const MN: [&str; 12] = [\"January\", \"February\", \"March\", \"April\", \"May\", \"June\", \"July\", \"August\", \"September\", \"October\", \"November\", \"December\"];",
+                    "let _ = (year, mon, day, hh, mi, ss, wd, h12, DN, MN);"]
             for ch in fmt:
                 code.append({"Y": 's.push_str(&year.to_string());', "y": 's.push_str(&format!("{:02}", year % 100));',
                              "m": 's.push_str(&format!("{:02}", mon));', "n": 's.push_str(&mon.to_string());',
                              "d": 's.push_str(&format!("{:02}", day));', "j": 's.push_str(&day.to_string());',
                              "H": 's.push_str(&format!("{:02}", hh));', "G": 's.push_str(&hh.to_string());',
-                             "i": 's.push_str(&format!("{:02}", mi));', "s": 's.push_str(&format!("{:02}", ss));'}.get(ch, "s.push_str(%s);" % _rs_str(_html_esc(ch))))
+                             "i": 's.push_str(&format!("{:02}", mi));', "s": 's.push_str(&format!("{:02}", ss));',
+                             "D": 's.push_str(&DN[wd as usize][..3]);', "l": 's.push_str(DN[wd as usize]);',
+                             "N": 's.push_str(&(if wd == 0 { 7 } else { wd }).to_string());', "w": 's.push_str(&wd.to_string());',
+                             "M": 's.push_str(&MN[(mon - 1) as usize][..3]);', "F": 's.push_str(MN[(mon - 1) as usize]);',
+                             "g": 's.push_str(&h12.to_string());', "h": 's.push_str(&format!("{:02}", h12));',
+                             "A": 's.push_str(if hh < 12 { "AM" } else { "PM" });', "a": 's.push_str(if hh < 12 { "am" } else { "pm" });'}.get(ch, "s.push_str(%s);" % _rs_str(_html_esc(ch))))
             return " ".join(code) + " }"
         if k in ("env_esc", "env_raw"):
             # env('X', 'default') read at run time (config values backed by .env)
@@ -1959,9 +1967,9 @@ def routes(root: str) -> list:
                         return q.group(0)
                     rq.append(("date_fmt", (fmt, _tz_off)))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
-                html = re.sub(r"""\{\{\s*date\(\s*(['"])([YymndjHGis:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
+                html = re.sub(r"""\{\{\s*date\(\s*(['"])([YymndjHGisDlNwMFghAa:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
                 html = re.sub(r"\{\{\s*now\(\)\s*->\s*year\s*\}\}", lambda q: _date(q, "Y"), html)
-                html = re.sub(r"""\{\{\s*now\(\)\s*->\s*format\(\s*(['"])([YymndjHGis:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
+                html = re.sub(r"""\{\{\s*now\(\)\s*->\s*format\(\s*(['"])([YymndjHGisDlNwMFghAa:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q, q.group(2)), html)
                 def _envv(q):
                     rq.append(("env_esc" if q.group(1) == "{{" else "env_raw", (q.group(3), (q.group(4) or "").replace("\\'", "'"))))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))

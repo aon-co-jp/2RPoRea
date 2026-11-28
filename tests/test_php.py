@@ -868,18 +868,18 @@ def test_request_validate_simple_rules(tmp_path):
 def test_back_with_flash_and_session():
     from torporea import php
     tr = php.translate("return back()->with('status', 'Saved');", [])
-    assert tr == ("backw", "status", "Saved", None)
-    assert php.translate("return redirect('/home')->with('k', 'v');", [])[3] == "/home"
+    assert tr == ("backw", [("status", "Saved")], None)
+    assert php.translate("return redirect('/home')->with('k', 'v')->with('j', $request->input('n'));", [])[1:] == ([("k", "v"), ("j", ("in", "n"))], "/home")
     assert "rporea_flash" in php._leaf_rs(tr)
 
 
 def test_with_request_input():
     from torporea import php
     tr = php.translate("return back()->with('s', $request->input('name'));", [])
-    assert tr == ("backw", "s", ("in", "name"), None) and php._uses_input(tr)
+    assert tr == ("backw", [("s", ("in", "name"))], None) and php._uses_input(tr)
 
 
 def test_with_route_param():
     from torporea import php
-    assert php.translate("return back()->with('s', $id);", ["id"]) == ("backw", "s", ("param", "id"), None)
+    assert php.translate("return back()->with('s', $id);", ["id"]) == ("backw", [("s", ("param", "id"))], None)
     assert php.translate("return back()->with('s', $x);", ["id"]) is None

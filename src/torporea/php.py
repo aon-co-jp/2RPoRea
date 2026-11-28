@@ -482,14 +482,16 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
-        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*(?:'([^'\\]*)'|\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))\s*\)", stmts[-1], re.S)
+        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))((?:\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*(?:'([^'\\]*)'|\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))\s*\))+)", stmts[-1], re.S)
         if bw:
-            # redirect('/path')->with(...) goes to the literal path; back() to the Referer.
-            # ->with('k', $request->input('x')) flashes the request value at run time.
-            if bw.group(5) and bw.group(5) not in params:
-                return None
-            val = ("param", bw.group(5)) if bw.group(5) else (bw.group(3) if bw.group(4) is None else ("in", bw.group(4)))
-            return ("backw", bw.group(2), val, bw.group(1))
+            # redirect('/path')->with(...) goes to the literal path; back() to the Referer. Each ->with('k', v) takes a
+            # literal, $request->input('x') (run-time value) or a route parameter.
+            items = []
+            for wm in re.finditer(r"\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*(?:'([^'\\]*)'|\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))\s*\)", bw.group(2)):
+                if wm.group(4) and wm.group(4) not in params:
+                    return None
+                items.append((wm.group(1), ("param", wm.group(4)) if wm.group(4) else (wm.group(2) if wm.group(3) is None else ("in", wm.group(3)))))
+            return ("backw", items, bw.group(1))
         bx = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\))((?:\s*->\s*with(?:Input|Errors)\((?:[^()]|\([^()]*\))*\))+)", stmts[-1], re.S)
         if bx and "withErrors" in bx.group(1):
             # withErrors(['k' => 'msg', ...]) with literal messages: flashed in the rporea_err cookie for @error / $errors->first().
@@ -580,7 +582,15 @@ def _leaf_rs(tr) -> str:
     if tr[0] == "status":
         return "{ let mut r = { %s }; *r.status_mut() = StatusCode::from_u16(%d).unwrap(); r }" % (_leaf_rs(tr[2]), tr[1])
     if tr[0] == "backw":
-        return "{ let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", %s); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_flash\", %s).parse().unwrap()); r }" % ("%s.parse().unwrap()" % _rs_str(tr[3]) if tr[3] else "back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())", _rs_str(json.dumps({tr[1]: tr[2]}, ensure_ascii=False)) if isinstance(tr[2], str) else ("&serde_json::json!({ %s: input.get(%s).cloned().unwrap_or(serde_json::Value::Null) }).to_string()" if tr[2][0] == "in" else "&serde_json::json!({ %s: params.get(%s).unwrap_or(\"\") }).to_string()") % (_rs_str(tr[1]), _rs_str(tr[2][1])))
+        def _v(v):
+            if isinstance(v, str):
+                return "serde_json::Value::String(%s.to_string())" % _rs_str(v)
+            if v[0] == "in":
+                return "input.get(%s).cloned().unwrap_or(serde_json::Value::Null)" % _rs_str(v[1])
+            return "serde_json::Value::String(params.get(%s).unwrap_or(\"\").to_string())" % _rs_str(v[1])
+        fl = " ".join("m.insert(%s.to_string(), %s);" % (_rs_str(k), _v(v)) for k, v in tr[1])
+        loc = "%s.parse().unwrap()" % _rs_str(tr[2]) if tr[2] else "back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())"
+        return "{ let mut m = serde_json::Map::new(); %s let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", %s); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_flash\", &serde_json::Value::Object(m).to_string()).parse().unwrap()); r }" % (fl, loc)
     if tr[0] == "valid":
         arr = ", ".join("(%s, &[%s][..])" % (_rs_str(k), ", ".join(_rs_str(r) for r in rs)) for k, rs in tr[1])
         back = "let mut r = hyper_compat::html_response(StatusCode::FOUND, String::new()); r.headers_mut().insert(\"location\", back_referer.parse().unwrap_or_else(|_| \"/\".parse().unwrap())); let kept: std::collections::HashMap<String, serde_json::Value> = input.iter().filter(|(k, _)| !matches!(k.as_str(), \"password\" | \"password_confirmation\" | \"current_password\")).map(|(k, v)| (k.clone(), v.clone())).collect(); r.headers_mut().append(\"set-cookie\", flash_old_cookie(&kept).parse().unwrap()); r.headers_mut().append(\"set-cookie\", flash_cookie(\"rporea_err\", &serde_json::to_string(&errs).unwrap_or_default()).parse().unwrap()); r"
@@ -1818,7 +1828,7 @@ def _uses_input(tr) -> bool:
     if tr[0] == "valid":
         return True
     if tr[0] == "backw":
-        return not isinstance(tr[2], str) and tr[2][0] == "in"
+        return any(not isinstance(v, str) and v[0] == "in" for _, v in tr[1])
     if tr[0] == "hdr":
         return _uses_input(tr[2])
     return tr[0] == "input_all" or (tr[0] == "text" and any(k in ("query", "query_esc") for k, _ in tr[1]))

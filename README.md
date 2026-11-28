@@ -164,3 +164,4 @@ pip install .                      # 開発中 / under development
 - 2026-11-28: redirect('/path')->with() / redirect('/path')->with() (see PORTING.md).
 - 2026-11-28: with() に $request->input() / with() of request input (see PORTING.md).
 - 2026-11-28: with() にルート引数 / with() of a route parameter (see PORTING.md).
+- 2026-11-28: with() の連結 / chained with() (see PORTING.md).

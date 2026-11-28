@@ -765,8 +765,10 @@ def _blade_layout(root: str, html, depth: int = 0):
         lay = re.sub(r"@section\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@show\b", _show, lay, flags=re.S)
         lay = re.sub(r"@stack\(\s*(['\"])([\w.-]+)\1\s*\)", lambda m: "".join(pre.get(m.group(2), []) + pushes.get(m.group(2), [])), lay)
         # @hasSection('x') ... [@else ...] @endif, decided at convert time from the child's sections.
-        lay = re.sub(r"@hasSection\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)(?:@else(.*?))?@endif\b",
-                     lambda m: m.group(3) if m.group(2) in sec else (m.group(4) or ""), lay, flags=re.S)
+        # A nested @if would pair with the wrong @endif, so such bodies are left alone (the view becomes a 501 TODO).
+        _nb = r"((?:(?!@(?:if|unless|isset|empty|hasSection|sectionMissing)\b).)*?)"
+        lay = re.sub(r"@(hasSection|sectionMissing)\(\s*(['\"])([\w.-]+)\2\s*\)" + _nb + r"(?:@else" + _nb + r")?@endif\b",
+                     lambda m: m.group(4) if (m.group(3) in sec) == (m.group(1) == "hasSection") else (m.group(5) or ""), lay, flags=re.S)
         html = re.sub(r"@yield\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)",
                       lambda m: sec.get(m.group(2), m.group(4) or ""), lay)
     else:
@@ -801,7 +803,7 @@ def _blade_layout(root: str, html, depth: int = 0):
     html = re.sub(r"@include\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*\[([^\[\]]*)\]\s*)?\)", _inc, html)
     if depth == 0:
         html = re.sub(r"@once\b(.*?)@endonce\b", _once, html, flags=re.S)
-    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|prepend|endprepend|stack|parent|show|once|endonce|hasSection)\b", html)):
+    if bad in html or (depth == 0 and re.search(r"@(?:extends|section|yield|endsection|include|push|endpush|prepend|endprepend|stack|parent|show|once|endonce|hasSection|sectionMissing)\b", html)):
         return None
     return html
 

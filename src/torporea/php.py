@@ -1786,6 +1786,25 @@ def routes(root: str) -> list:
                 html = _trsub(r"\{\{\s*(?:__|trans)\(\s*" + _TRA + r"\s*\}\}", True)(html)
                 html = _trsub(r"\{!!\s*(?:__|trans)\(\s*" + _TRA + r"\s*!!\}", False)(html)
                 html = _trsub(r"@lang\(\s*" + _TRA, True)(html)
+                # trans_choice('k', 3) / @choice('k', 3) with a literal count: {0} / [1,4] / [5,*] segments,
+                # otherwise "one|many" (count == 1 -> first); :count is filled (Laravel's MessageSelector).
+                def _choice(q):
+                    t, c = _tr(q.group(2)), int(q.group(3))
+                    segs = t.split("|")
+                    pick = None
+                    for sg in segs:
+                        mm = re.match(r"\s*\{(\d+)\}\s*(.*)$", sg, re.S)
+                        if mm and int(mm.group(1)) == c:
+                            pick = mm.group(2); break
+                        mm = re.match(r"\s*\[(\d+|\*)\s*,\s*(\d+|\*)\]\s*(.*)$", sg, re.S)
+                        if mm and (mm.group(1) == "*" or c >= int(mm.group(1))) and (mm.group(2) == "*" or c <= int(mm.group(2))):
+                            pick = mm.group(3); break
+                    if pick is None:
+                        plain = [re.sub(r"^\s*(\{\d+\}|\[[^\]]*\])\s*", "", x) for x in segs]
+                        pick = plain[0] if (c == 1 or len(plain) == 1) else plain[1]
+                    return pick.replace(":count", str(c))
+                html = re.sub(r"\{\{\s*trans_choice\(\s*(['\"])([^'\"]+)\1\s*,\s*(\d+)\s*\)\s*\}\}", lambda q: _html_esc(_choice(q)), html)
+                html = re.sub(r"@choice\(\s*(['\"])([^'\"]+)\1\s*,\s*(\d+)\s*\)", lambda q: _html_esc(_choice(q)), html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

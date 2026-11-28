@@ -895,3 +895,10 @@ def test_validate_more_rules():
     from torporea import php
     tr = php.translate("$request->validate(['c' => 'alpha_num|between:3,5', 'k' => 'in:a,b']); return 'ok';", [])
     assert tr[1] == [("c", ["alpha_num", "between:3,5"]), ("k", ["in:a,b"])]
+
+
+def test_session_directive(tmp_path):
+    import re
+    from torporea import php
+    src = open(php.__file__, encoding="utf-8").read()
+    assert "@endsession" in src

@@ -133,3 +133,4 @@
 - 2026-11-28: session() の既定値 / session() default (see PORTING.md).
 - 2026-11-28: with() に文字列の連結 / with() of concatenation (see PORTING.md).
 - 2026-11-28: validate() に alpha・alpha_num・in・between / more validate() rules (see PORTING.md).
+- 2026-11-28: @session ディレクティブ / @session directive (see PORTING.md).

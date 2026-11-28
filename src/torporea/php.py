@@ -1480,6 +1480,8 @@ def routes(root: str) -> list:
                     rq.append(("old_esc", (q.group(2), q.group(4) or "")))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*old\(\s*(['\"])(\w+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _old, html)
+                # Laravel 11 @session('k') ... {{ $value }} ... @endsession == @if(session('k')) ... {{ session('k') }} ... @endif
+                html = re.sub(r"@session\(\s*(['\"])([\w.-]+)\1\s*\)(.*?)@endsession\b", lambda q: "@if(session('%s'))%s@endif" % (q.group(2), re.sub(r"\{\{\s*\$value\s*\}\}", "{{ session('%s') }}" % q.group(2), q.group(3))), html, flags=re.S)
                 def _sess(q):
                     rq.append(("sess_esc", (q.group(2), q.group(4) or "")))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))

@@ -482,20 +482,25 @@ def translate(body: str, params: list):
         if ab:
             msg = "".join(v for _, v in _P(ab.group(2), params, env).value()[1]) if ab.group(2) else ""
             return ("abort", int(ab.group(1)), msg)
-        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))((?:\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?)(?:\s*\.\s*(?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?))*)\s*\))+)", stmts[-1], re.S)
+        bw = re.fullmatch(r"return\s+(?:back\(\s*\)|redirect\(\s*\)\s*->\s*back\(\s*\)|redirect\(\s*'(/[\w./-]*)'\s*\))((?:\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*){0,2}(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\)){0,2})(?:\s*\.\s*(?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*){0,2}(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\)){0,2}))*)\s*\))+)", stmts[-1], re.S)
         if bw:
             # redirect('/path')->with(...) goes to the literal path; back() to the Referer. Each ->with('k', v) takes a
             # literal, $request->input('x') (run-time value) or a route parameter.
             items = []
-            for wm in re.finditer(r"\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?)(?:\s*\.\s*(?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\))?))*)\s*\)", bw.group(2)):
+            for wm in re.finditer(r"\s*->\s*with\(\s*'([\w.-]+)'\s*,\s*((?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*){0,2}(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\)){0,2})(?:\s*\.\s*(?:'[^'\\]*'|(?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*){0,2}(?:\$request\s*->\s*input\(\s*'[\w.-]+'\s*\)|\$\w+)(?:\s*\)){0,2}))*)\s*\)", bw.group(2)):
                 # 'a' . $id . $request->input('x'): concatenation of literals, route parameters and request values.
                 parts = []
-                for am in re.finditer(r"'([^'\\]*)'|(?:(strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*)?(?:\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))(?(2)\s*\))", wm.group(2)):
+                for am in re.finditer(r"'([^'\\]*)'|((?:(?:strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(\s*){0,2})(?:\$request\s*->\s*input\(\s*'([\w.-]+)'\s*\)|\$(\w+))(?:\s*\)){0,2}", wm.group(2)):
                     if am.group(4) and am.group(4) not in params:
                         return None
                     a = ("param", am.group(4)) if am.group(4) else (am.group(1) if am.group(3) is None else ("in", am.group(3)))
                     # strtoupper/strtolower/trim/ucfirst around one value
-                    parts.append(("fn", am.group(2), a) if am.group(2) else a)
+                    fns = re.findall(r"(strtoupper|strtolower|trim|ucfirst|ucwords|lcfirst|strrev|ltrim|rtrim)\(", am.group(2) or "")
+                    if am.group(1) is None and am.group(0).count(")") - am.group(0).count("(") != 0:
+                        return None
+                    for f in reversed(fns):
+                        a = ("fn", f, a)
+                    parts.append(a)
                 if any(not isinstance(x, str) and x[0] == "fn" for x in parts) and len(parts) == 1:
                     parts.append("")
                 items.append((wm.group(1), parts[0] if len(parts) == 1 else ("cat", parts)))

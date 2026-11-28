@@ -1474,6 +1474,14 @@ def routes(root: str) -> list:
                         j = j.replace(a, b)
                     return j
                 html = re.sub(r"@json\(\s*\$(\w+)\s*\)", _jsond, html)
+                # @checked($k) / @selected($k) / @disabled($k) / @readonly($k) / @required($k) over literal data: the attribute word when truthy.
+                def _attrd(q):
+                    if q.group(2) not in data:
+                        return q.group(0)
+                    v = data[q.group(2)]
+                    t = bool(v) if isinstance(v, (list, dict)) else (isinstance(v, str) and v not in ("", "0"))
+                    return q.group(1) if t else ""
+                html = re.sub(r"@(checked|selected|disabled|readonly|required)\(\s*\$(\w+)\s*\)", _attrd, html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):

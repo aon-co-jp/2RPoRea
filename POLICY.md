@@ -180,3 +180,4 @@
 - 2026-11-28 env() 由来の config を実行時に / env()-backed config at run time (113 tests pass)
 - 2026-11-28 config の入れ子の鍵 / Nested config keys (113 tests pass)
 - 2026-11-28 config の鍵は同じ階層だけで探す / Config keys match at their own level (113 tests pass)
+- 2026-11-28 日付 date()・now() / Dates at run time (113 tests pass)

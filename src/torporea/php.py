@@ -688,6 +688,20 @@ def _leaf_rs(tr) -> str:
         if k == "env_if":
             # @env / @production: APP_ENV at run time, "production" when unset (Laravel's default).
             return "if [%s].contains(&std::env::var(\"APP_ENV\").unwrap_or_else(|_| \"production\".to_string()).as_str()) { %s } else { %s }" % (", ".join(_rs_str(x) for x in v[0]), " ".join(piece_old(a, b) for a, b in v[1]), " ".join(piece_old(a, b) for a, b in v[2]))
+        if k == "date_fmt":
+            # date('Y-m-d H:i:s') / now()->year at run time, UTC (Laravel's default app timezone)
+            code = ["{ let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);",
+                    "let (dd, sod) = (t.div_euclid(86400), t.rem_euclid(86400)); let z = dd + 719468; let era = z.div_euclid(146097); let doe = z - era * 146097;",
+                    "let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); let mp = (5 * doy + 2) / 153;",
+                    "let day = doy - (153 * mp + 2) / 5 + 1; let mon = if mp < 10 { mp + 3 } else { mp - 9 }; let year = yoe + era * 400 + if mon <= 2 { 1 } else { 0 };",
+                    "let (hh, mi, ss) = (sod / 3600, sod % 3600 / 60, sod % 60); let _ = (year, mon, day, hh, mi, ss);"]
+            for ch in v:
+                code.append({"Y": 's.push_str(&year.to_string());', "y": 's.push_str(&format!("{:02}", year % 100));',
+                             "m": 's.push_str(&format!("{:02}", mon));', "n": 's.push_str(&mon.to_string());',
+                             "d": 's.push_str(&format!("{:02}", day));', "j": 's.push_str(&day.to_string());',
+                             "H": 's.push_str(&format!("{:02}", hh));', "G": 's.push_str(&hh.to_string());',
+                             "i": 's.push_str(&format!("{:02}", mi));', "s": 's.push_str(&format!("{:02}", ss));'}.get(ch, "s.push_str(%s);" % _rs_str(_html_esc(ch))))
+            return " ".join(code) + " }"
         if k in ("env_esc", "env_raw"):
             # env('X', 'default') read at run time (config values backed by .env)
             eesc = ".replace('&', \"&amp;\").replace('<', \"&lt;\").replace('>', \"&gt;\").replace('\"', \"&quot;\").replace('\\'', \"&#039;\")" if k == "env_esc" else ""
@@ -1927,6 +1941,12 @@ def routes(root: str) -> list:
                     rq.append(("sess_esc", (q.group(2), q.group(4) or "")))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
                 html = re.sub(r"\{\{\s*session\(\s*(['\"])([\w.-]+)\1\s*(?:,\s*(['\"])([^'\"]*)\3\s*)?\)\s*\}\}", _sess, html)
+                def _date(fmt):
+                    rq.append(("date_fmt", fmt))
+                    return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
+                html = re.sub(r"""\{\{\s*date\(\s*(['"])([YymndjHGis:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q.group(2)), html)
+                html = re.sub(r"\{\{\s*now\(\)\s*->\s*year\s*\}\}", lambda q: _date("Y"), html)
+                html = re.sub(r"""\{\{\s*now\(\)\s*->\s*format\(\s*(['"])([YymndjHGis:/ .,-]+)\1\s*\)\s*\}\}""", lambda q: _date(q.group(2)), html)
                 def _envv(q):
                     rq.append(("env_esc" if q.group(1) == "{{" else "env_raw", (q.group(3), (q.group(4) or "").replace("\\'", "'"))))
                     return "%sRQ%d%s" % (chr(1), len(rq) - 1, chr(1))
@@ -1962,7 +1982,7 @@ def routes(root: str) -> list:
                         for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), x)):
                             if i % 2:
                                 e = rq[int(seg)]
-                                if e[0] not in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if", "env_esc", "env_raw"):
+                                if e[0] not in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if", "env_esc", "env_raw", "date_fmt"):
                                     raise ValueError
                                 out.append(e)
                             elif seg:
@@ -2056,7 +2076,7 @@ def routes(root: str) -> list:
                 for i, seg in enumerate(re.split(chr(1) + r"RQ(\d+)" + chr(1), html)):
                     if i % 2:
                         e = rq[int(seg)]
-                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if", "env_esc", "env_raw") else ("query_esc", e))
+                        tparts.append(e if e[0] in ("old_esc", "err_first", "err_blk", "err_all", "err_if", "sess_esc", "sess_if", "csrf", "env_if", "env_esc", "env_raw", "date_fmt") else ("query_esc", e))
                     elif seg:
                         tparts.append(("lit", seg))
                 tr_v = ("text", tparts or [("lit", "")])

@@ -819,10 +819,21 @@ def _blade_layout(root: str, html, depth: int = 0):
             # @include('v', ['k' => 'literal', ...]): literal strings only, substituted into {{ $k }} / {!! $k !!}.
             data = {}
             body = m.group(3).strip()
-            for kv in re.finditer(r"'(\w+)'\s*=>\s*'([^'\\]*)'\s*(?:,|$)", body):
-                data[kv.group(1)] = kv.group(2)
-            if re.sub(r"'(\w+)'\s*=>\s*'([^'\\]*)'\s*(?:,|$)", "", body).strip():
+            ren = {}
+            pair = r"'(\w+)'\s*=>\s*(?:'([^'\\]*)'|\$(\w+))\s*(?:,|$)"
+            for kv in re.finditer(pair, body):
+                if kv.group(3) is not None:
+                    ren[kv.group(1)] = kv.group(3)
+                else:
+                    data[kv.group(1)] = kv.group(2)
+            if re.sub(pair, "", body).strip():
                 return bad
+            # ['k' => $var]: the partial's $k becomes the parent's $var, so the normal view pipeline fills it.
+            # A partial that binds $k itself (foreach ... as $k, @php $k =) is left as a TODO.
+            for k, var in ren.items():
+                if re.search(r"(?:\bas\s+\$%s\b|\$%s\s*=[^=>])" % (k, k), v):
+                    return bad
+                v = re.sub(r"\$%s\b" % k, "$" + var, v)
             v = re.sub(r"\{\{\s*\$(\w+)\s*\}\}", lambda q: _h.escape(data[q.group(1)]) if q.group(1) in data else q.group(0), v)
             v = re.sub(r"\{!!\s*\$(\w+)\s*!!\}", lambda q: data[q.group(1)] if q.group(1) in data else q.group(0), v)
         return v

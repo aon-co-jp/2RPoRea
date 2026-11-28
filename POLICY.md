@@ -131,3 +131,4 @@
 - 2026-11-28 `@switch`/`@case`/`@default` を変換(実測一致) / `@switch` converted (measured).
 - 2026-11-28 `@class`/`@style` を変換(実測一致) / `@class`/`@style` converted (measured).
 - 2026-11-28 `@class`/`@style` の比較式に対応(実測一致) / comparison conditions in `@class`/`@style` (measured).
+- 2026-11-28 ビューデータの入れ子配列・整数に対応(実測一致) / nested arrays and integers in view data (measured).

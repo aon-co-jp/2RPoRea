@@ -2083,6 +2083,11 @@ def _php_array(src):
         ws()
         if src.startswith("[", pos[0]):
             return array()
+        m = re.compile(r"-?\d+(?![\w.])").match(src, pos[0])
+        if m:
+            # integer literal (e.g. 'n' => 1): kept as int; callers that only handle strings skip it.
+            pos[0] = m.end()
+            return int(m.group(0))
         return string()
 
     def array():

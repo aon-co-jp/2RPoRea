@@ -1789,7 +1789,12 @@ def routes(root: str) -> list:
                 # trans_choice('k', 3) / @choice('k', 3) with a literal count: {0} / [1,4] / [5,*] segments,
                 # otherwise "one|many" (count == 1 -> first); :count is filled (Laravel's MessageSelector).
                 def _choice(q):
-                    t, c = _tr(q.group(2)), int(q.group(3))
+                    cv = q.group(3)
+                    if cv.startswith("$"):
+                        cv = data.get(cv[1:])
+                        if isinstance(cv, bool) or not isinstance(cv, (int, str)) or not str(cv).lstrip("-").isdigit():
+                            return None
+                    t, c = _tr(q.group(2)), int(cv)
                     segs = t.split("|")
                     pick = None
                     for sg in segs:
@@ -1803,8 +1808,8 @@ def routes(root: str) -> list:
                         plain = [re.sub(r"^\s*(\{\d+\}|\[[^\]]*\])\s*", "", x) for x in segs]
                         pick = plain[0] if (c == 1 or len(plain) == 1) else plain[1]
                     return pick.replace(":count", str(c))
-                html = re.sub(r"\{\{\s*trans_choice\(\s*(['\"])([^'\"]+)\1\s*,\s*(\d+)\s*\)\s*\}\}", lambda q: _html_esc(_choice(q)), html)
-                html = re.sub(r"@choice\(\s*(['\"])([^'\"]+)\1\s*,\s*(\d+)\s*\)", lambda q: _html_esc(_choice(q)), html)
+                html = re.sub(r"\{\{\s*trans_choice\(\s*(['\"])([^'\"]+)\1\s*,\s*(\d+|\$\w+)\s*\)\s*\}\}", lambda q: q.group(0) if _choice(q) is None else _html_esc(_choice(q)), html)
+                html = re.sub(r"@choice\(\s*(['\"])([^'\"]+)\1\s*,\s*(\d+|\$\w+)\s*\)", lambda q: q.group(0) if _choice(q) is None else _html_esc(_choice(q)), html)
                 # @method('PUT'): Laravel's hidden method-spoofing field.
                 html = re.sub(r"@method\(\s*(['\"])(GET|POST|PUT|PATCH|DELETE)\1\s*\)", lambda q: '<input type="hidden" name="_method" value="%s">' % q.group(2), html, flags=re.I)
                 for _ in range(8):
